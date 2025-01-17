@@ -12,31 +12,33 @@ pub enum NetflowVersion {
     V9(u16)
 }
 
+//enabled is the order
+//value is actual payload
 #[derive(Copy, Clone)]
-enum U8Field {
+pub enum U8Field {
     Disabled,
-    Enabled,
+    Enabled(u16),
     Value(u8),
 }
 
 #[derive(Copy, Clone)]
-enum U16Field {
+pub enum U16Field {
     Disabled,
-    Enabled,
+    Enabled(u16),
     Value(u16),
 }
 
 #[derive(Copy, Clone)]
-enum U32Field {
+pub enum U32Field {
     Disabled,
-    Enabled,
+    Enabled(u16),
     Value(u32),
 }
 
 #[derive(Copy, Clone)]
-enum Ipv4Field {
+pub enum Ipv4Field {
     Disabled,
-    Enabled,
+    Enabled(u16),
     Value(Ipv4Addr),
 }
 
@@ -44,7 +46,8 @@ enum Ipv4Field {
 #[derive(Copy, Clone, Default)]
 pub struct NetflowTemplate {
     //no mpls, mpls, or application
-    pub id: Option<U16Field>,
+    pub id: Option<u16>,
+    pub count: Option<u16>,
     pub in_octets: Option<U32Field>, /// Can be higher
     pub in_packets: Option<U32Field>, /// Can be higher
     pub flows: Option<U32Field>, /// Can be higher   
@@ -175,7 +178,7 @@ impl NetflowServer {
                     continue;
                 }
             };
-            //self.parse_flow_data(byte_count);
+            self.parse_flow_data(byte_count, sender);
             //netflow_packet = self.build_netflow_packet();
 
         }
@@ -206,67 +209,67 @@ impl NetflowServer {
         }
     }
 
-    fn decode_and_enable_field(&self, field_id: u16, received_template: &mut NetflowTemplate) {
+    fn decode_and_enable_field(&self, field_id: u16,order: u16, received_template: &mut NetflowTemplate) {
         match field_id {
             1 => {
                 println!("Field id 1 is IN_BYTES");
-                received_template.in_octets = Some(U32Field::Enabled);
+                received_template.in_octets = Some(U32Field::Enabled(order));
             },
             2 => {
                 println!("Field id 2 is IN_PKTS");
-                received_template.in_packets = Some(U32Field::Enabled);
+                received_template.in_packets = Some(U32Field::Enabled(order));
             },
             3 => {
                 println!("Field id 3 is FLOWS");
-                received_template.flows = Some(U32Field::Enabled);
+                received_template.flows = Some(U32Field::Enabled(order));
             },
             4 => {
                 println!("Field id 4 is PROTOCOL");
-                received_template.protocol = Some(U8Field::Enabled);
+                received_template.protocol = Some(U8Field::Enabled(order));
             },
             5 => {
                 println!("Field id 5 is SRC_TOS");
-                received_template.src_tos = Some(U8Field::Enabled);
+                received_template.src_tos = Some(U8Field::Enabled(order));
             },
             6 => {
                 println!("Field id 6 is TCP_FLAGS");
-                received_template.tcp_flags = Some(U8Field::Enabled);
+                received_template.tcp_flags = Some(U8Field::Enabled(order));
             },
             7 => {
                 println!("Field id 7 is SRC_PORT");
-                received_template.src_port = Some(U16Field::Enabled);
+                received_template.src_port = Some(U16Field::Enabled(order));
             },
             8 => {
                 println!("Field id 8 is SRC_ADDR");
-                received_template.src_addr = Some(Ipv4Field::Enabled);
+                received_template.src_addr = Some(Ipv4Field::Enabled(order));
             },
             9 => {
                 println!("Field id 9 is SRC_MASK");
-                received_template.src_mask = Some(U8Field::Enabled);
+                received_template.src_mask = Some(U8Field::Enabled(order));
             },
             10 => {
                 println!("Field id 10 is INPUT_SNMP");
-                received_template.input_snmp = Some(U16Field::Enabled);
+                received_template.input_snmp = Some(U16Field::Enabled(order));
             },
             11 => {
                 println!("Field id 11 is DST_PORT");
-                received_template.dst_port = Some(U16Field::Enabled);
+                received_template.dst_port = Some(U16Field::Enabled(order));
             },
             12 => {
                 println!("Field id 12 is DST_ADDR");
-                received_template.dst_addr = Some(Ipv4Field::Enabled);
+                received_template.dst_addr = Some(Ipv4Field::Enabled(order));
             },
             13 => {
                 println!("Field id 13 is DST_MASK");
-                received_template.dst_mask = Some(U8Field::Enabled);
+                received_template.dst_mask = Some(U8Field::Enabled(order));
             },
             14 => {
                 println!("Field id 14 is OUTPUT_SNMP");
-                received_template.output_snmp = Some(U16Field::Enabled);
+                received_template.output_snmp = Some(U16Field::Enabled(order));
             },
             15 => {
                 println!("Field id 15 is NEXT_HOP");
-                received_template.ipv4_next_hop = Some(Ipv4Field::Enabled);
+                received_template.ipv4_next_hop = Some(Ipv4Field::Enabled(order));
             },
             _ => {
                 println!("Unsure of the field id {field_id}");
@@ -313,13 +316,15 @@ impl NetflowServer {
         let template_id_array: [u8; 2] = template_id_slice.try_into().expect("Unable to convert template_id_slice to array");
         let template_id: u16 = u16::from_be_bytes(template_id_array);
         println!("The payload template_id is {template_id}");
-        received_template.id = Some(U16Field::Enabled);
+        received_template.id = Some(template_id);
     
         //field count
         let field_count_slice: &[u8]  = &message[26..28];
         let field_count_array: [u8; 2] = field_count_slice.try_into().expect("Unable to convert field_count_slice to array");
         let field_count: u16 = u16::from_be_bytes(field_count_array);
         println!("The payload field_count is {field_count}");
+        //save the field count so we can easily iterate later
+        received_template.count = Some(field_count);
 
         let mut start_slice: usize = 28;
         let mut end_slice: usize = 30;
@@ -329,7 +334,9 @@ impl NetflowServer {
             let field_array: [u8; 2] = field_slice.try_into().expect("Unable to convert field_slice to array");
             let field_data: u16 = u16::from_be_bytes(field_array);
             println!("The payload field_slice for field {x} is {field_data}");
-            self.decode_and_enable_field(field_data, &mut received_template);
+            //leaving 0 open because that means no order
+            let order = x+1;
+            self.decode_and_enable_field(field_data, order, &mut received_template);
             start_slice += inc_size;
             end_slice += inc_size;
         }
@@ -341,7 +348,29 @@ impl NetflowServer {
     }
 
 
-    pub fn parse_flow_data(&self, byte_count: usize) {
+    pub fn parse_flow_data(&self, byte_count: usize, sender: NetflowSender) {
+        let message: &[u8]  = &self.receive_buffer[..byte_count];
+        println!("Parsing...");
+
+         //flowset length
+         let data_len_slice: &[u8]  = &message[22..24];
+         let data_len_array: [u8; 2] = data_len_slice.try_into().expect("Unable to convert data_len_slice to array");
+         let data_len: u16 = u16::from_be_bytes(data_len_array);
+         println!("The payload data_len is {data_len}");
+     
+ 
+         //template id
+         let template_id_slice: &[u8]  = &message[24..26];
+         let template_id_array: [u8; 2] = template_id_slice.try_into().expect("Unable to convert template_id_slice to array");
+         let template_id: u16 = u16::from_be_bytes(template_id_array);
+         println!("The payload template_id is {template_id}");
+
+       
+         //field count
+         let field_count_slice: &[u8]  = &message[26..28];
+         let field_count_array: [u8; 2] = field_count_slice.try_into().expect("Unable to convert field_count_slice to array");
+         let field_count: u16 = u16::from_be_bytes(field_count_array);
+         println!("The payload field_count is {field_count}");
 
     }
 
