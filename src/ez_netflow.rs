@@ -115,11 +115,11 @@ pub struct NetflowTemplate {
     pub src_port: Option<U16Field>,
     pub src_addr: Option<Ipv4Field>,
     pub src_mask: Option<U8Field>,
-    pub input_snmp: Option<U16Field>, /// Can be higher
+    pub input_snmp: Option<U32Field>, /// Can be higher
     pub dst_port: Option<U16Field>,
     pub dst_addr: Option<Ipv4Field>,
     pub dst_mask: Option<U8Field>, /// Can be higher 
-    pub output_snmp: Option<U16Field>,
+    pub output_snmp: Option<U32Field>,
     pub next_hop: Option<Ipv4Field>,  
     // src_as: Option<U32Field>, //can be higher         
     // dst_as: Option<U32Field>, //can be higher    
@@ -204,18 +204,30 @@ impl NetflowSender {
         }
 
     }
+
+    pub fn report_flow_stats(&mut self) {
+
+          //look for existing flow and update
+          for flow in &mut self.flow_stats {
+            println!("Start flow data...");
+            println!("Src IP is {} and Dst IP is {}", flow.src_and_dst_ip.0, flow.src_and_dst_ip.1 );
+            println!("Protocol is {}", flow.protocol);
+            println!("Bytes/octets are {}", flow.in_octets );
+            println!("Packets are {}", flow.in_packets);
+            println!("End flow data");
+
+            
+        }
+    }
+    
     pub fn parse_packet_to_flow(&mut self) {
         let packet_result = self.flow_packets.pop();
         match packet_result {
             Some(pkt) => {
                 println!("parsing packet to flow");
-                //get tuple
-                //look for existing flow and update
-                //or
-                //create new flow
 
+                //get tuple
                 //Need to handle optional variants
-                //
                 let proto: u8 = match pkt.protocol {
                     Some(U8Field::Value(v)) => {
                         v
@@ -267,7 +279,25 @@ impl NetflowSender {
                     }
                 );
 
-                if self.flow_stats.is_empty(){
+                let mut updated_flow = false;
+                //look for existing flow and update
+                for flow in &mut self.flow_stats {
+                    if flow.src_and_dst_ip == s_and_d_ip && 
+                        flow.src_and_dst_port == s_and_d_port &&
+                        flow.protocol == proto {
+
+                        println!("updating existing flow");
+                        flow.in_octets += oct;
+                        flow.in_packets+= pk;
+                        updated_flow = true;
+                    
+                    }
+                }
+
+                //no flows
+                //create new flow
+                if !updated_flow {
+                    println!("flow_stats is empty, creating new flow");
                     let new_flow = NetFlow {
                         src_and_dst_ip: s_and_d_ip,
                         src_and_dst_port: s_and_d_port,
@@ -276,7 +306,7 @@ impl NetflowSender {
                         in_octets: oct,
                         in_packets: pk,
                     };
-                    self.flow_stats.push(new_flow);
+                    self.flow_stats.push(new_flow)
                 }
 
             },
@@ -337,7 +367,10 @@ impl NetflowServer {
             let senders_len = self.senders.len();
             for x in 0..senders_len {
                 self.senders[x].parse_packet_to_flow();
+                self.senders[x].report_flow_stats();
             }
+            
+
            
         }
 
@@ -554,10 +587,10 @@ impl NetflowServer {
                 4
             },
             FlowField::SrcMask => {
-                8
+                1
             },
             FlowField::InputSNMP => {
-                2
+                4
             },
             FlowField::DstPort => {
                 2
@@ -569,7 +602,7 @@ impl NetflowServer {
                 1
             },
             FlowField::OutputSNMP => {
-                2
+                4
             },
             FlowField::NextHop => {
                 4
@@ -626,7 +659,7 @@ impl NetflowServer {
                 let field_array: [u8; 4] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data = u32::from_be_bytes(field_array);
                 let field_data_ipv4: Ipv4Addr = Ipv4Addr::from_bits(field_data);
-                println!("The field is SrcAddr and the converted payload is {}", field_data_ipv4.to_string());
+                println!("The field is SrcAddr and the converted payload is {}", field_data_ipv4);
                 new_packet.src_addr = Some(Ipv4Field::Value(field_data_ipv4));
             },
             FlowField::SrcMask => {
@@ -636,10 +669,10 @@ impl NetflowServer {
                 new_packet.src_mask = Some(U8Field::Value(field_data));
             },
             FlowField::InputSNMP => {
-                let field_array: [u8; 2] = field_slice.try_into().expect("Unable to convert field_slice to array");
-                let field_data = u16::from_be_bytes(field_array);
+                let field_array: [u8; 4] = field_slice.try_into().expect("Unable to convert field_slice to array");
+                let field_data = u32::from_be_bytes(field_array);
                 println!("The field is InputSNMP and the converted payload is {}",field_data );
-                new_packet.input_snmp = Some(U16Field::Value(field_data));
+                new_packet.input_snmp = Some(U32Field::Value(field_data));
             },
             FlowField::DstPort => {
                 let field_array: [u8; 2] = field_slice.try_into().expect("Unable to convert field_slice to array");
@@ -651,8 +684,8 @@ impl NetflowServer {
                 let field_array: [u8; 4] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data: u32 = u32::from_be_bytes(field_array);
                 let field_data_ipv4: Ipv4Addr = Ipv4Addr::from_bits(field_data);
-                println!("The field is SrcAddr and the converted payload is {}", field_data_ipv4.to_string());
-                new_packet.src_addr = Some(Ipv4Field::Value(field_data_ipv4));
+                println!("The field is DstAddr and the converted payload is {}", field_data_ipv4);
+                new_packet.dst_addr = Some(Ipv4Field::Value(field_data_ipv4));
             },
             FlowField::DstMask => {
                 let field_array: [u8; 1] = field_slice.try_into().expect("Unable to convert field_slice to array");
@@ -661,16 +694,16 @@ impl NetflowServer {
                 new_packet.dst_mask = Some(U8Field::Value(field_data));
             },
             FlowField::OutputSNMP => {
-                let field_array: [u8; 2] = field_slice.try_into().expect("Unable to convert field_slice to array");
-                let field_data = u16::from_be_bytes(field_array);
+                let field_array: [u8; 4] = field_slice.try_into().expect("Unable to convert field_slice to array");
+                let field_data = u32::from_be_bytes(field_array);
                 println!("The field is OutputSNMP and the converted payload is {}",field_data );
-                new_packet.output_snmp = Some(U16Field::Value(field_data));
+                new_packet.output_snmp = Some(U32Field::Value(field_data));
             },
             FlowField::NextHop => {
                 let field_array: [u8; 4] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data_u32: u32 = u32::from_be_bytes(field_array);
                 let field_data_ipv4: Ipv4Addr = Ipv4Addr::from_bits(field_data_u32);
-                println!("The field is SrcAddr and the converted payload is {}", field_data_ipv4.to_string());
+                println!("The field is SrcAddr and the converted payload is {}", field_data_ipv4);
                 new_packet.next_hop = Some(Ipv4Field::Value(field_data_ipv4));
             },
             _ => {
@@ -824,8 +857,6 @@ impl NetflowServer {
  
             let field_slice: &[u8]  = &message[start_slice..end_slice];
             self.set_field_value(field_type, sender_index, &mut new_packet, field_slice);
-
-  
 
             if !initial_field_parsed {
                 initial_field_parsed = true;
