@@ -22,6 +22,14 @@ pub enum U8Field {
 }
 
 #[derive(Copy, Clone)]
+pub enum U64Field {
+    Disabled,
+    Enabled,
+    Value(u64),
+}
+
+
+#[derive(Copy, Clone)]
 pub enum U16Field {
     Disabled,
     Enabled,
@@ -94,6 +102,7 @@ enum FlowField {
 #[derive(Clone, Default)]
 pub struct NetflowTemplate {
     //no mpls, mpls, or application
+    pub parsed: bool,
     pub order_vec: Vec<FlowField>,
     pub id: Option<u16>,
     pub field_count: Option<u16>,
@@ -136,14 +145,14 @@ pub struct NetflowTemplate {
     pub max_ttl: Option<U8Field>,
     pub ident: Option<U16Field>,
     pub dst_tos: Option<U8Field>,
-    pub in_src_mac: Option<[U8Field; 6]>,
-    pub out_dst_mac: Option<[U8Field; 6]>,
+    pub in_src_mac: Option<U64Field>,
+    pub out_dst_mac: Option<U64Field>,
     pub src_vlan: Option<U16Field>,
     pub dst_vlan: Option<U16Field>,
     pub ip_version: Option<U8Field>,
     pub direction: Option<U8Field>,
-    pub in_dst_mac: Option<[U8Field; 6]>,
-    pub out_src_mac: Option<[U8Field; 6]>,
+    pub in_dst_mac: Option<U64Field>,
+    pub out_src_mac: Option<U64Field>,
     //if_name: u64, //not sure since it's specified in the template
     //if_desc: u64, //not sure since it's specified in the template
     in_permanent_bytes: Option<U32Field>, /// Can be higher
@@ -169,11 +178,114 @@ pub struct NetflowPacket {
 
 }
 
-#[derive(Clone)]
+pub struct NetFlow {
+    pub src_and_dst_ip: (Ipv4Addr, Ipv4Addr),
+    pub src_and_dst_port: (u16, u16),
+    pub protocol: u8,
+    pub in_octets: u32,
+    pub in_packets: u32,
+}
+
+
 pub struct NetflowSender {
     pub ip_addr: Ipv4Addr,
     pub active_template: NetflowTemplate,
     pub flow_packets: Vec<NetflowTemplate>,
+    pub flow_stats:  Vec<NetFlow>,
+}
+
+impl NetflowSender {
+    pub fn new(new_sender_ip: Ipv4Addr, template: NetflowTemplate) -> Self {
+        NetflowSender {
+            ip_addr: new_sender_ip,
+            active_template: template,
+            flow_packets: Vec::new(),
+            flow_stats: Vec::new(),
+        }
+
+    }
+    pub fn parse_packet_to_flow(&mut self) {
+        let packet_result = self.flow_packets.pop();
+        match packet_result {
+            Some(pkt) => {
+                println!("parsing packet to flow");
+                //get tuple
+                //look for existing flow and update
+                //or
+                //create new flow
+
+                //Need to handle optional variants
+                //
+                let proto: u8 = match pkt.protocol {
+                    Some(U8Field::Value(v)) => {
+                        v
+                    },
+                    _ => 0,
+                };
+                
+                let oct: u32 = match pkt.in_octets {
+                    Some(U32Field::Value(v)) => {
+                        v
+                    },
+                    _ => 0,
+                };
+
+                let pk: u32 = match pkt.in_packets {
+                    Some(U32Field::Value(v)) => {
+                        v
+                    },
+                    _ => 0,
+                };
+
+                let s_and_d_ip: (Ipv4Addr, Ipv4Addr) = (
+                    match pkt.src_addr {
+                        Some(Ipv4Field::Value(v)) => {
+                            v
+                        },
+                        _ => Ipv4Addr::UNSPECIFIED,
+                    },
+                    match pkt.dst_addr {
+                        Some(Ipv4Field::Value(v)) => {
+                            v
+                        },
+                        _ => Ipv4Addr::UNSPECIFIED,
+                    }
+                );
+
+                let s_and_d_port: (u16, u16) = (
+                    match pkt.src_port {
+                        Some(U16Field::Value(v)) => {
+                            v
+                        },
+                        _ => 0,
+                    },
+                    match pkt.dst_port {
+                        Some(U16Field::Value(v)) => {
+                            v
+                        },
+                        _ => 0,
+                    }
+                );
+
+                if self.flow_stats.is_empty(){
+                    let new_flow = NetFlow {
+                        src_and_dst_ip: s_and_d_ip,
+                        src_and_dst_port: s_and_d_port,
+                        protocol: proto,
+                        //Need to handle optional variants
+                        in_octets: oct,
+                        in_packets: pk,
+                    };
+                    self.flow_stats.push(new_flow);
+                }
+
+            },
+            None => {
+                println!("Can't parse empty packet in parse_stats_on_packet, skipping");
+                return;
+            }
+        };
+    }
 }
 
 pub struct NetflowServer {
@@ -185,6 +297,7 @@ pub struct NetflowServer {
     // pub source_address: SocketAddr,
     pub senders: Vec<NetflowSender>,
 }
+
 
 pub fn convert_socket_to_ipv4(source_address: SocketAddr) -> Ipv4Addr {
     let new_sender_ip_general: IpAddr = source_address.ip();
@@ -219,9 +332,13 @@ impl NetflowServer {
             //only account for 1 sender atm
             let (byte_count, source_address) = self.wait_for_netflow_data();
             let sender_index =  self.match_sender(byte_count, source_address).expect("Sender not found");
-            self.parse_flow_data(byte_count, sender_index);
-            //netflow_packet = self.build_netflow_packet();
-
+            self.parse_data_to_packet(byte_count, sender_index);
+            //let test: &mut NetflowSender = &mut self.senders[0];
+            let senders_len = self.senders.len();
+            for x in 0..senders_len {
+                self.senders[x].parse_packet_to_flow();
+            }
+           
         }
 
 
@@ -246,6 +363,7 @@ impl NetflowServer {
                 ip_addr: new_sender_ip,
                 active_template: template,
                 flow_packets: Vec::new(),
+                flow_stats: Vec::new(),
             };
             self.senders.push(new_sender);
         }
@@ -272,7 +390,7 @@ impl NetflowServer {
     //     Err(Error::new(ErrorKind::InvalidData, "Unable to find order for decoding return"))
     // }
 
-    fn decode_field_order(&self, field_id: u16,order: u16, received_template: &mut NetflowTemplate) {
+    fn decode_field_order(&self, field_id: u16, received_template: &mut NetflowTemplate) {
         match field_id {
             1 => {
                 println!("Field id 0 is IN_BYTES");
@@ -477,9 +595,9 @@ impl NetflowServer {
                 println!("The field is InPkts and the converted payload is {}",field_data );
                 new_packet.in_packets = Some(U32Field::Value(field_data));
             },
-            FlowField::Flows => {
+            // FlowField::Flows => {
 
-            },
+            // },
             FlowField::Protocol => {
                 let field_array: [u8; 1] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data = u8::from_be_bytes(field_array);
@@ -487,10 +605,16 @@ impl NetflowServer {
                 new_packet.protocol = Some(U8Field::Value(field_data));
             },
             FlowField::SrcTOS => {
-
+                let field_array: [u8; 1] = field_slice.try_into().expect("Unable to convert field_slice to array");
+                let field_data = u8::from_be_bytes(field_array);
+                println!("The field is SrcTOS and the converted payload is {}",field_data);
+                new_packet.src_tos = Some(U8Field::Value(field_data));
             },
             FlowField::TCPFlags => {
-
+                let field_array: [u8; 1] = field_slice.try_into().expect("Unable to convert field_slice to array");
+                let field_data = u8::from_be_bytes(field_array);
+                println!("The field is TCPFlags and the converted payload is {}",field_data);
+                new_packet.tcp_flags = Some(U8Field::Value(field_data));
             },
             FlowField::SrcPort => {
                 let field_array: [u8; 2] = field_slice.try_into().expect("Unable to convert field_slice to array");
@@ -506,7 +630,10 @@ impl NetflowServer {
                 new_packet.src_addr = Some(Ipv4Field::Value(field_data_ipv4));
             },
             FlowField::SrcMask => {
-               
+                let field_array: [u8; 1] = field_slice.try_into().expect("Unable to convert field_slice to array");
+                let field_data = u8::from_be_bytes(field_array);
+                println!("The field is SrcMask and the converted payload is {}",field_data);
+                new_packet.src_mask = Some(U8Field::Value(field_data));
             },
             FlowField::InputSNMP => {
                 let field_array: [u8; 2] = field_slice.try_into().expect("Unable to convert field_slice to array");
@@ -528,7 +655,10 @@ impl NetflowServer {
                 new_packet.src_addr = Some(Ipv4Field::Value(field_data_ipv4));
             },
             FlowField::DstMask => {
-               
+                let field_array: [u8; 1] = field_slice.try_into().expect("Unable to convert field_slice to array");
+                let field_data = u8::from_be_bytes(field_array);
+                println!("The field is DstMask and the converted payload is {}",field_data);
+                new_packet.dst_mask = Some(U8Field::Value(field_data));
             },
             FlowField::OutputSNMP => {
                 let field_array: [u8; 2] = field_slice.try_into().expect("Unable to convert field_slice to array");
@@ -609,9 +739,7 @@ impl NetflowServer {
         let message: &[u8]  = &self.receive_buffer[..byte_count];
         println!("Parsing...");
 
-        let mut received_template = NetflowTemplate {
-            ..Default::default()
-        };
+        let mut received_template = NetflowTemplate::default();
         //flowset length
         self.parse_flow_length(message);
      
@@ -628,14 +756,14 @@ impl NetflowServer {
 
         let mut start_slice: usize = 28;
         let mut end_slice: usize = 30;
-        let mut inc_size: usize = 4;
+        let inc_size: usize = 4;
         for x in 0..field_count  {
             let field_slice: &[u8]  = &message[start_slice..end_slice];
             let field_array: [u8; 2] = field_slice.try_into().expect("Unable to convert field_slice to array");
             let field_data: u16 = u16::from_be_bytes(field_array);
             println!("The payload field_slice for field {x} is {field_data}");
             let order = x;
-            self.decode_field_order(field_data, order, &mut received_template);
+            self.decode_field_order(field_data, &mut received_template);
             start_slice += inc_size;
             end_slice += inc_size;
         }
@@ -647,101 +775,9 @@ impl NetflowServer {
     }
 
 
-    // pub fn enable_flow_template_fields(&mut self, byte_count: usize, sender: &mut NetflowSender)  {
-    //     //if flowset id == 0, it's a template
-    //     //the udp receive func starts us at byte 30 because that's the udp payload
-    //     //byte 20 and 21 in the payload are the flowset ID,
-    //     //thus, if the u16 at byte 20 and 21 is 0 it's a template, else it's data
-    
-    //     let message: &[u8]  = &self.receive_buffer[..byte_count];
-    //     println!("Parsing...");
 
- 
-    //     let field_count = sender.active_template.field_count.unwrap();
 
-    //     let mut start_slice: usize = 28;
-    //     let mut end_slice: usize = 30;
-    //     let mut inc_size: usize = 4;
-    //     for x in 0..field_count  {
-    //         let field_slice: &[u8]  = &message[start_slice..end_slice];
-    //         let field_array: [u8; 2] = field_slice.try_into().expect("Unable to convert field_slice to array");
-    //         let field_data: u16 = u16::from_be_bytes(field_array);
-    //         println!("The payload field_slice for field {x} is {field_data}");
-    //         let order = x;
-    //         match x {
-    //             1 => {
-    //                 println!("Field id 1 is IN_BYTES");
-    //                 sender.active_template.in_octets = Some(U32Field::Enabled(order));
-                
-    //             },
-    //             2 => {
-    //                 println!("Field id 2 is IN_PKTS");
-    //                 sender.active_template.in_packets = Some(U32Field::Enabled(order));
-    //             },
-    //             3 => {
-    //                 println!("Field id 3 is FLOWS");
-    //                 sender.active_template.flows = Some(U32Field::Enabled(order));
-    //             },
-    //             4 => {
-    //                 println!("Field id 4 is PROTOCOL");
-    //                 sender.active_template.protocol = Some(U8Field::Enabled(order));
-    //             },
-    //             5 => {
-    //                 println!("Field id 5 is SRC_TOS");
-    //                 sender.active_template.src_tos = Some(U8Field::Enabled(order));
-    //             },
-    //             6 => {
-    //                 println!("Field id 6 is TCP_FLAGS");
-    //                 sender.active_template.tcp_flags = Some(U8Field::Enabled(order));
-    //             },
-    //             7 => {
-    //                 println!("Field id 7 is SRC_PORT");
-    //                 sender.active_template.src_port = Some(FlowField::SrcPort(Some(U16Field::Enabled(order))));
-    //             },
-    //             8 => {
-    //                 println!("Field id 8 is SRC_ADDR");
-    //                 sender.active_template.src_addr = FlowField::SrcAddr(Ipv4Field::Enabled(Order))
-    //             },
-    //             9 => {
-    //                 println!("Field id 9 is SRC_MASK");
-    //                 sender.active_template.src_mask = Some(U8Field::Enabled(order));
-    //             },
-    //             10 => {
-    //                 println!("Field id 10 is INPUT_SNMP");
-    //                 sender.active_template.input_snmp = Some(U16Field::Enabled(order));
-    //             },
-    //             11 => {
-    //                 println!("Field id 11 is DST_PORT");
-    //                 sender.active_template.dst_port = Some(U16Field::Enabled(order));
-    //             },
-    //             12 => {
-    //                 println!("Field id 12 is DST_ADDR");
-    //                 sender.active_template.dst_addr = Some(Ipv4Field::Enabled(order));
-    //             },
-    //             13 => {
-    //                 println!("Field id 13 is DST_MASK");
-    //                 sender.active_template.dst_mask = Some(U8Field::Enabled(order));
-    //             },
-    //             14 => {
-    //                 println!("Field id 14 is OUTPUT_SNMP");
-    //                 sender.active_template.output_snmp = Some(U16Field::Enabled(order));
-    //             },
-    //             15 => {
-    //                 println!("Field id 15 is NEXT_HOP");
-    //                 sender.active_template.ipv4_next_hop = Some(Ipv4Field::Enabled(order));
-    //             },
-    //             _ => {
-    //                 println!("Unsure of the field id {field_id}");
-    //             },
-    //         }
-
-    //         start_slice += inc_size;
-    //         end_slice += inc_size;
-    //     }
-
-    // }
-
-    pub fn parse_flow_data(&mut self, byte_count: usize, sender_index: usize) {
+    pub fn parse_data_to_packet(&mut self, byte_count: usize, sender_index: usize) {
         let message: &[u8]  = &self.receive_buffer[..byte_count];
         println!("Parsing...");
 
@@ -773,9 +809,7 @@ impl NetflowServer {
             return;
         }
 
-        let mut new_packet: NetflowTemplate = NetflowTemplate {
-            ..Default::default()
-        };
+        let mut new_packet: NetflowTemplate = NetflowTemplate::default();
 
         let field_count_size: usize = field_count.into();
         for x in 0..field_count_size  {
@@ -801,63 +835,6 @@ impl NetflowServer {
 
     }
 
-
-    // pub fn parse_flow_data(&self, byte_count: usize, sender: NetflowSender) {
-    //     let message: &[u8]  = &self.receive_buffer[..byte_count];
-    //     println!("Parsing...");
-
-    //     //flowset length
-    //     self.parse_flow_length(message);
-     
- 
-    //     //template id
-    //     let template_id = self.parse_flow_template_id_from_data(message);
-    //     if template_id != sender.active_template.id.expect("sender.active_template.id is None") {
-    //         println!("The flow data template_id does not match the sender.active_template.id");
-    //         return;
-    //     }
-
-    //     //field count
-    //     let field_count = sender.active_template.field_count.unwrap();
-
-    //     //data can be parsed
-    //     let mut start_slice: usize = 24;
-    //     //get the intial size of the first field
-    //     let mut inc_size: usize = self.decode_and_return_field(0, &sender).unwrap();
-    //     let mut end_slice: usize = start_slice + inc_size;
-    //     let mut initial_field_parsed = false;
-    //     for x in 0..field_count  {
-    //         //this runs after the first iteration because we already incremented before the for loop
-    //         if initial_field_parsed {
-    //             //update size per field
-    //             inc_size = self.decode_and_return_field(field_count, &sender).unwrap();
-    //             start_slice += inc_size;
-    //             end_slice += inc_size;
-    //         }
-
-    //         //+1 is needed because the range is exclusive of the last
-    //         let field_slice: &[u8]  = &message[start_slice..end_slice + 1];
-    //         if inc_size == 1 {
-    //             let field_array: [u8; 1] = field_slice.try_into().expect("Unable to convert field_slice to array");
-    //             let field_data: u8 = u8::from_be_bytes(field_array);
-    //             println!("The payload field_slice for field {x} is {field_data}");
-    //         } else if inc_size == 2 {
-    //             let field_array: [u8; 2] = field_slice.try_into().expect("Unable to convert field_slice to array");
-    //             let field_data: u16 = u16::from_be_bytes(field_array);
-    //             println!("The payload field_slice for field {x} is {field_data}");
-    //         } else if inc_size == 4 {
-    //             //fails when it's an IP
-    //             let field_array: [u8; 4] = field_slice.try_into().expect("Unable to convert field_slice to array");
-    //             let field_data: u32 = u32::from_be_bytes(field_array);
-    //             println!("The payload field_slice for field {x} is {field_data}");
-    //         } 
-           
-    //         if !initial_field_parsed {
-    //             initial_field_parsed = true;
-    //         }
-    //     }
-
-    // }
 
 
 
