@@ -1,15 +1,15 @@
 
 
 use std::net::{UdpSocket, SocketAddr};
-use std::net::{Ipv4Addr, IpAddr};
+use std::net::Ipv4Addr;
 use std::convert::TryInto;
-use std::io::{Error,ErrorKind, Result};
-use std::str::FromStr;
+use std::io::{Error,ErrorKind};
 
 
 use crate::ez_nf::fields::*;
 use crate::ez_nf::senders::*;
 use crate::ez_nf::templates::*;
+use crate::ez_nf::utils::*;
 
 
 
@@ -25,12 +25,7 @@ pub struct NetflowServer {
 }
 
 
-pub fn convert_socket_to_ipv4(source_address: SocketAddr) -> Ipv4Addr {
-    let new_sender_ip_general: IpAddr = source_address.ip();
-    let new_sender_str  = new_sender_ip_general.to_string();
-    Ipv4Addr::from_str(new_sender_str.as_str())
-        .expect("Unable to convert string to ipv4")
-}
+
 
 impl NetflowServer {
     pub fn new(addr_and_port: &str) -> Self {
@@ -99,25 +94,6 @@ impl NetflowServer {
     }
 
     
-    // fn decode_and_return_field(&self, order: u16, sender: &NetflowSender) -> std::result::Result<usize, std::io::Error> {
-    //     let test_src_addr = sender.active_template.src_addr.expect("Unable to read sender.active_template.src_addr ");
-    //     if let Ipv4Field::Enabled(val) = test_src_addr {
-    //         if val == order {
-    //             println!("TEST: test_src_addr val is {val} and order is {order}");
-    //             return Ok(4);
-    //         }
-    //     }
-
-    //     let test_in_octets = sender.active_template.in_octets.expect("Unable to read sender.active_template.in_octets ");
-    //     if let U32Field::Enabled(val) = test_in_octets {
-    //         if val == order {
-    //             println!("TEST: test_in_octets val is {val} and order is {order}");
-    //             return Ok(4);
-    //         }
-    //     }
-
-    //     Err(Error::new(ErrorKind::InvalidData, "Unable to find order for decoding return"))
-    // }
 
     fn decode_field_order(&self, field_id: u16, received_template: &mut NetflowTemplate) {
         match field_id {
@@ -637,18 +613,6 @@ impl NetflowServer {
     }
         
         
-
-}
-
-pub fn check_packet_size(byte_count: usize) -> Result<()> {
-    println!("checking packet size");
-    let min_pkt_size: usize = 20;
-    if byte_count < min_pkt_size {
-        Err(Error::new(ErrorKind::InvalidData, "Packet is too small"))
-    }
-    else {
-        Ok(())
-    }
 
 }
 
