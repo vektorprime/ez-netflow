@@ -1,15 +1,13 @@
-
-
 use std::net::{UdpSocket, SocketAddr};
 use std::net::Ipv4Addr;
 use std::convert::TryInto;
 use std::io::{Error,ErrorKind};
 
 
-use crate::ez_nf::fields::*;
-use crate::ez_nf::senders::*;
-use crate::ez_nf::templates::*;
-use crate::ez_nf::utils::*;
+use crate::fields::*;
+use crate::senders::*;
+use crate::templates::*;
+use crate::utils::*;
 
 
 
@@ -52,7 +50,7 @@ impl NetflowServer {
         loop {
             //only account for 1 sender atm
             let (byte_count, source_address) = self.wait_for_netflow_data();
-            let sender_index =  self.match_sender(byte_count, source_address).expect("Sender not found");
+            let sender_index =  self.match_sender(source_address).expect("Sender not found");
             self.parse_data_to_packet(byte_count, sender_index);
             //let test: &mut NetflowSender = &mut self.senders[0];
             let senders_len = self.senders.len();
@@ -81,7 +79,7 @@ impl NetflowServer {
                 break;
             }
         }
-        if (!found_sender) {
+        if !found_sender {
             
             let new_sender = NetflowSender {
                 ip_addr: new_sender_ip,
@@ -286,7 +284,7 @@ impl NetflowServer {
         }
     }
 
-    fn set_field_value(&self, flow_field: FlowField, sender_index: usize, new_packet: &mut NetflowTemplate, field_slice: &[u8]) {
+    fn set_field_value(&self, flow_field: FlowField, new_packet: &mut NetflowTemplate, field_slice: &[u8]) {
         match flow_field {
             FlowField::InOctets => {
                 let field_array: [u8; 4] = field_slice.try_into().expect("Unable to convert field_slice to array");
@@ -467,7 +465,6 @@ impl NetflowServer {
             let field_array: [u8; 2] = field_slice.try_into().expect("Unable to convert field_slice to array");
             let field_data: u16 = u16::from_be_bytes(field_array);
             println!("The payload field_slice for field {x} is {field_data}");
-            let order = x;
             self.decode_field_order(field_data, &mut received_template);
             start_slice += inc_size;
             end_slice += inc_size;
@@ -528,7 +525,7 @@ impl NetflowServer {
             }
  
             let field_slice: &[u8]  = &message[start_slice..end_slice];
-            self.set_field_value(field_type, sender_index, &mut new_packet, field_slice);
+            self.set_field_value(field_type, &mut new_packet, field_slice);
 
             if !initial_field_parsed {
                 initial_field_parsed = true;
@@ -596,8 +593,7 @@ impl NetflowServer {
         }
     }
 
-    pub fn match_sender(&mut self, byte_count: usize, source_address: SocketAddr) -> std::result::Result<usize, std::io::Error> {
-        let mut found_sender = false;
+    pub fn match_sender(&mut self, source_address: SocketAddr) -> std::result::Result<usize, std::io::Error> {
         let sender_ip = convert_socket_to_ipv4(source_address);
         let vec_len = self.senders.len();
         for x in 0..vec_len {
@@ -612,7 +608,62 @@ impl NetflowServer {
         Err(Error::new(ErrorKind::AddrNotAvailable, "Sender not found"))
     }
         
-        
 
+    
+    
+
+}
+
+
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    
+    #[test]
+    fn test_template_data() {
+
+        let fake_template_data = [ 
+            0x00, 0x09, 0x00, 0x01, 0x28, 0x67, 0x12, 0x74, 0x67, 
+            0x90, 0x18, 0xee, 0x00, 0x00, 0x53, 0x5a, 0x00, 0x00,
+            0x01, 0x00, 0x00, 0x00, 0x00, 0x30, 0x01, 0x02, 0x00,
+            0x0a, 0x00, 0x08, 0x00, 0x04, 0x00, 0x0c, 0x00, 0x04,
+            0x00, 0x04, 0x00, 0x01, 0x00, 0x07, 0x00, 0x02, 0x00,
+            0x0b, 0x00, 0x02, 0x00, 0x06, 0x00, 0x01, 0x00, 0x0a,
+            0x00, 0x04, 0x00, 0x0e, 0x00, 0x04, 0x00, 0x01, 0x00,
+            0x04, 0x00, 0x02, 0x00, 0x04,
+        ];
+
+            /////////////////////////////////////////////////////////////
+            //0-1 version 9 ( 2 bytes)
+            //2-3 count 1 (2 bytes)
+            //4-7 timestamp  jan 21 2025 16:01:14.00000 CST (4 bytes)
+            //8-11 flow seq 21344 (4 byte)
+            //12-15 source id 256 (4 bytes)
+            //16-17 flowset id 0 (2 bytes)
+            //18-19 length 48 (2 bytes)
+            //20-21 template id 258 (2 bytes)
+            //22-23 field count 10 (2 bytes)
+            //24-27 ip_src_addr type 00 08 length 00 04 (4 bytes)
+            //28-31 ip dst addr type 00 0c length 00 04 (4 bytes)
+            //32-35  protocol 00 04 length 00 01 (4 bytes)
+            //36-39 l4 src port 00 07 length 00 02 (4 bytes)
+            //40-43 l4 dst port 00 0b length 00 02 (4 bytes)
+            //44-47 tcp_flags 00 06 length 00 01 (4 bytes)
+            //49-51 input_snmp 00 0a length 00 04 (4 bytes)
+            //52-55 output snmp 00 0e length 00 04 (4 bytes)
+            //56-59 bytes 00 01 length 00 04 (4 bytes)
+            //60-63 pkts 00 02 length 00 04 (bytes)
+            /////////////////////////////////////////////////////////////
+
+            let mut test_server = NetflowServer::new("10.0.0.40:2055");
+            let fake_data_len = fake_template_data.len();
+            test_server.receive_buffer[..fake_data_len].copy_from_slice(&fake_template_data);
+            let returned_template: NetflowTemplate = test_server.parse_flow_template(fake_data_len);
+            let result = true;
+            assert!(result);
+    }
+    
 }
 

@@ -1,6 +1,6 @@
 use std::net::Ipv4Addr;
-use crate::ez_nf::templates::*;
-use crate::ez_nf::fields::*;
+use crate::templates::*;
+use crate::fields::*;
 
 
 pub struct NetflowSender {
@@ -11,15 +11,14 @@ pub struct NetflowSender {
 }
 
 impl NetflowSender {
-    pub fn new(new_sender_ip: Ipv4Addr, template: NetflowTemplate) -> Self {
-        NetflowSender {
-            ip_addr: new_sender_ip,
-            active_template: template,
-            flow_packets: Vec::new(),
-            flow_stats: Vec::new(),
-        }
-
-    }
+    // pub fn new(new_sender_ip: Ipv4Addr, template: NetflowTemplate) -> Self {
+    //     NetflowSender {
+    //         ip_addr: new_sender_ip,
+    //         active_template: template,
+    //         flow_packets: Vec::new(),
+    //         flow_stats: Vec::new(),
+    //     }
+    // }
 
     pub fn report_flow_stats(&mut self) {
 
@@ -45,52 +44,38 @@ impl NetflowSender {
                 //get tuple
                 //Need to handle optional variants
                 let proto: u8 = match pkt.protocol {
-                    Some(U8Field::Value(v)) => {
-                        v
-                    },
+                    Some(U8Field::Value(v)) => { v },
                     _ => 0,
                 };
                 
                 let oct: u32 = match pkt.in_octets {
-                    Some(U32Field::Value(v)) => {
-                        v
-                    },
+                    Some(U32Field::Value(v)) => { v },
                     _ => 0,
                 };
 
                 let pk: u32 = match pkt.in_packets {
-                    Some(U32Field::Value(v)) => {
-                        v
-                    },
+                    Some(U32Field::Value(v)) => { v },
                     _ => 0,
                 };
 
                 let s_and_d_ip: (Ipv4Addr, Ipv4Addr) = (
                     match pkt.src_addr {
-                        Some(Ipv4Field::Value(v)) => {
-                            v
-                        },
+                        Some(Ipv4Field::Value(v)) => { v },
                         _ => Ipv4Addr::UNSPECIFIED,
                     },
                     match pkt.dst_addr {
-                        Some(Ipv4Field::Value(v)) => {
-                            v
-                        },
+                        Some(Ipv4Field::Value(v)) => { v },
                         _ => Ipv4Addr::UNSPECIFIED,
                     }
                 );
 
                 let s_and_d_port: (u16, u16) = (
                     match pkt.src_port {
-                        Some(U16Field::Value(v)) => {
-                            v
-                        },
+                        Some(U16Field::Value(v)) => { v },
                         _ => 0,
                     },
                     match pkt.dst_port {
-                        Some(U16Field::Value(v)) => {
-                            v
-                        },
+                        Some(U16Field::Value(v)) => { v },
                         _ => 0,
                     }
                 );

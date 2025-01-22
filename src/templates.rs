@@ -1,6 +1,6 @@
 use std::net::Ipv4Addr;
 
-use crate::ez_nf::fields::*;
+use crate::fields::*;
 
 
 #[derive(Clone, Default)]
