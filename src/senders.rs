@@ -38,91 +38,95 @@ impl NetflowSender {
     }
     
     pub fn parse_packet_to_flow(&mut self) {
-        let packet_result = self.flow_packets.pop();
-        match packet_result {
-            Some(pkt) => {
-                //println!("parsing packet to flow");
+        let packet_count = self.flow_packets.len();
+        for _ in 0..packet_count {
+        
+            let packet_result = self.flow_packets.pop();
+            match packet_result {
+                Some(pkt) => {
+                    //println!("parsing packet to flow");
 
-                //get tuple
-                //Need to handle optional variants
-                let proto: u8 = match pkt.protocol {
-                    Some(U8Field::Value(v)) => { v },
-                    _ => 0,
-                };
-                
-                let oct: u32 = match pkt.in_octets {
-                    Some(U32Field::Value(v)) => { v },
-                    _ => 0,
-                };
-
-                let pk: u32 = match pkt.in_packets {
-                    Some(U32Field::Value(v)) => { v },
-                    _ => 0,
-                };
-
-                let s_and_d_ip: (Ipv4Addr, Ipv4Addr) = (
-                    match pkt.src_addr {
-                        Some(Ipv4Field::Value(v)) => { v },
-                        _ => Ipv4Addr::UNSPECIFIED,
-                    },
-                    match pkt.dst_addr {
-                        Some(Ipv4Field::Value(v)) => { v },
-                        _ => Ipv4Addr::UNSPECIFIED,
-                    }
-                );
-
-                let s_and_d_port: (u16, u16) = (
-                    match pkt.src_port {
-                        Some(U16Field::Value(v)) => { v },
+                    //get tuple
+                    //Need to handle optional variants
+                    let proto: u8 = match pkt.protocol {
+                        Some(U8Field::Value(v)) => { v },
                         _ => 0,
-                    },
-                    match pkt.dst_port {
-                        Some(U16Field::Value(v)) => { v },
-                        _ => 0,
-                    }
-                );
-
-                let mut updated_flow = false;
-                //look for existing flow and update
-                for flow in &mut self.flow_stats {
-                    if flow.src_and_dst_ip == s_and_d_ip && 
-                        flow.src_and_dst_port == s_and_d_port &&
-                        flow.protocol == proto {
-
-                        //println!("updating existing flow");
-                        flow.in_octets += oct;
-                        flow.in_packets += pk;
-                        updated_flow = true;
-                    
-                    }
-                }
-
-                //no flows
-                //create new flow
-                if !updated_flow {
-                    //println!("flow_stats is empty, creating new flow");
-                    let new_flow = NetFlow {
-                        src_and_dst_ip: s_and_d_ip,
-                        src_and_dst_port: s_and_d_port,
-                        protocol: proto,
-                        //Need to handle optional variants
-                        in_octets: oct,
-                        in_packets: pk,
                     };
-                    self.flow_stats.push(new_flow)
-                }
+                    
+                    let oct: u32 = match pkt.in_octets {
+                        Some(U32Field::Value(v)) => { v },
+                        _ => 0,
+                    };
 
-            },
-            None => {
-                //println!("Can't parse empty packet in parse_stats_on_packet, skipping");
-                return;
-            }
-        };
+                    let pk: u32 = match pkt.in_packets {
+                        Some(U32Field::Value(v)) => { v },
+                        _ => 0,
+                    };
+
+                    let s_and_d_ip: (Ipv4Addr, Ipv4Addr) = (
+                        match pkt.src_addr {
+                            Some(Ipv4Field::Value(v)) => { v },
+                            _ => Ipv4Addr::UNSPECIFIED,
+                        },
+                        match pkt.dst_addr {
+                            Some(Ipv4Field::Value(v)) => { v },
+                            _ => Ipv4Addr::UNSPECIFIED,
+                        }
+                    );
+
+                    let s_and_d_port: (u16, u16) = (
+                        match pkt.src_port {
+                            Some(U16Field::Value(v)) => { v },
+                            _ => 0,
+                        },
+                        match pkt.dst_port {
+                            Some(U16Field::Value(v)) => { v },
+                            _ => 0,
+                        }
+                    );
+
+                    let mut updated_flow = false;
+                    //look for existing flow and update
+                    for flow in &mut self.flow_stats {
+                        if flow.src_and_dst_ip == s_and_d_ip && 
+                            flow.src_and_dst_port == s_and_d_port &&
+                            flow.protocol == proto {
+
+                            //println!("updating existing flow");
+                            flow.in_octets += oct;
+                            flow.in_packets += pk;
+                            updated_flow = true;
+                        
+                        }
+                    }
+
+                    //no flows
+                    //create new flow
+                    if !updated_flow {
+                        //println!("flow_stats is empty, creating new flow");
+                        let new_flow = NetFlow {
+                            src_and_dst_ip: s_and_d_ip,
+                            src_and_dst_port: s_and_d_port,
+                            protocol: proto,
+                            //Need to handle optional variants
+                            in_octets: oct,
+                            in_packets: pk,
+                        };
+                        self.flow_stats.push(new_flow)
+                    }
+
+                },
+                None => {
+                    //println!("Can't parse empty packet in parse_stats_on_packet, skipping");
+                    return;
+                }
+            };
+        }
     }
 }
 
 
-pub fn merge_senders(received_senders: Vec<NetflowSender>, global_senders: &mut Vec<NetflowSender>) {
+pub fn merge_senders(received_senders: &Vec<NetflowSender>, global_senders: &mut Vec<NetflowSender>) {
     if global_senders.is_empty() {
         for s in received_senders {
             global_senders.push(s.clone());
@@ -131,14 +135,14 @@ pub fn merge_senders(received_senders: Vec<NetflowSender>, global_senders: &mut 
     else {
         let mut temp_senders: Vec<NetflowSender> = Vec::new();
 
-        for s in &received_senders {
+        for s in received_senders {
             let mut found = false;
             for g in &mut *global_senders {
                 if s.ip_addr == g.ip_addr {
                     found = true;
-                    //copy all flows into g.flow_stats vec
-                    for flow in &s.flow_stats {
-                        g.flow_stats.push(flow.clone());
+                    //copy all flow packets into g.flow_packets vec to parse later
+                    for pkt in &s.flow_packets {
+                        g.flow_packets.push(pkt.clone());
                     }
                     // no longer need to look at global_senders
                     break;
@@ -149,7 +153,10 @@ pub fn merge_senders(received_senders: Vec<NetflowSender>, global_senders: &mut 
             }
         }
 
-        global_senders.append(&mut temp_senders);
+        if !temp_senders.is_empty() {
+            global_senders.append(&mut temp_senders);
+        }
+        
     }
 
 }

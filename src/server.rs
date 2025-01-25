@@ -55,10 +55,11 @@ impl NetflowServer {
             self.parse_data_to_packet(byte_count, sender_index);
             //let test: &mut NetflowSender = &mut self.senders[0];
             let senders_len = self.senders.len();
-            for x in 0..senders_len {
-                self.senders[x].parse_packet_to_flow();
-                //self.senders[x].report_flow_stats();
-            }
+            //moved these functions over to the cli view otherwise the packets get consumed and I can't report on them later
+            // for x in 0..senders_len {
+            //     self.senders[x].parse_packet_to_flow();
+            //     self.senders[x].report_flow_stats();
+            // }
 
             let mut senders: Vec<NetflowSender> = Vec::new();
             for s in &self.senders {

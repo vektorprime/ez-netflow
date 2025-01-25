@@ -53,8 +53,8 @@ fn main() {
             println!("No data to display");
             continue;
         }
-        
-        merge_senders(available_senders, &mut saved_senders);
+
+        merge_senders(&available_senders, &mut saved_senders);
         let user_input = get_user_input(&saved_senders).unwrap();
         let ip_to_check = convert_string_to_ipv4(user_input);
         let ip = match ip_to_check {
@@ -64,6 +64,11 @@ fn main() {
                 continue
             }
         };
+
+        for sender in &mut saved_senders {
+            sender.parse_packet_to_flow();
+        }
+
         show_sender_info(&saved_senders, ip);
     }
     
