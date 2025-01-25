@@ -27,7 +27,7 @@ fn main() {
     });
 
     let mut saved_senders: Vec<NetflowSender> = Vec::new();
-
+    //will modify the loop to process inside server thread
     loop {
         let available_senders_result = rx.try_recv();
         let available_senders = match available_senders_result {
