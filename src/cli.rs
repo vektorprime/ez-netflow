@@ -32,5 +32,18 @@ pub fn show_sender_info(senders: &Vec<NetflowSender>, ip: Ipv4Addr) {
             s.report_flow_stats();
         }
     }
+    let mut confirmed_continue = false;
+    while !confirmed_continue {
+        println!("Press enter clear the screen and continue");
+        let mut answer = String::new();
+        io::stdin().read_line(&mut answer).expect("Failed to read line");
+        //check for pressed enter
+        if answer.trim().is_empty() { 
+            confirmed_continue = true;
+            //clear screen
+            println!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+        };
+        
+    }
 
 }

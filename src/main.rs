@@ -26,25 +26,36 @@ fn main() {
         netflow_server.run();
     });
 
-    let saved_senders: Vec<NetflowSender> = Vec::new();
+    let mut saved_senders: Vec<NetflowSender> = Vec::new();
 
     loop {
         let available_senders_result = rx.try_recv();
         let available_senders = match available_senders_result {
-            Ok(s) => s,
+            Ok(s) => {
+                println!("Received new data");
+                s
+            },
             Err(std::sync::mpsc::TryRecvError::Empty) => {
                 //println!("Nothing to receive, skipping");
                 thread::sleep(Duration::from_secs(1));
-                print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
-                println!("No data available, please wait");
+                println!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+                println!("No new data");
+                Vec::new()
                 //println!("\n");
-                continue
+                //continue
             },
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                 panic!("Receiver disconnected");
             }
         };
-        let user_input = get_user_input(&available_senders).unwrap();
+
+        if available_senders.is_empty() && saved_senders.is_empty() {
+            println!("No data to display");
+            continue;
+        }
+        
+        merge_senders(available_senders, &mut saved_senders);
+        let user_input = get_user_input(&saved_senders).unwrap();
         let ip_to_check = convert_string_to_ipv4(user_input);
         let ip = match ip_to_check {
             Ok(ip) => ip,
@@ -53,7 +64,7 @@ fn main() {
                 continue
             }
         };
-        show_sender_info(&available_senders, ip);
+        show_sender_info(&saved_senders, ip);
     }
     
 }
