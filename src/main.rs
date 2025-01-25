@@ -26,6 +26,8 @@ fn main() {
         netflow_server.run();
     });
 
+    let saved_senders: Vec<NetflowSender> = Vec::new();
+
     loop {
         let available_senders_result = rx.try_recv();
         let available_senders = match available_senders_result {
@@ -33,6 +35,9 @@ fn main() {
             Err(std::sync::mpsc::TryRecvError::Empty) => {
                 //println!("Nothing to receive, skipping");
                 thread::sleep(Duration::from_secs(1));
+                print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+                println!("No data available, please wait");
+                //println!("\n");
                 continue
             },
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {

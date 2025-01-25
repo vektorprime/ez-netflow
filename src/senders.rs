@@ -120,3 +120,31 @@ impl NetflowSender {
         };
     }
 }
+
+
+pub fn merge_senders(received_senders: Vec<NetflowSender>, global_senders: &mut Vec<NetflowSender>) {
+    if global_senders.is_empty() {
+        for s in received_senders {
+            global_senders.push(s);
+        }
+    }
+    else {
+        let mut temp_vec: Vec<NetflowSender> = Vec::new();
+
+        for s in &received_senders {
+            let mut found = false;
+            for g in &*global_senders {
+                if s.ip_addr == g.ip_addr { 
+                    found = true;
+                    break; 
+                }
+            }
+            if !found {
+                temp_vec.push(s.clone());
+            }
+        }
+
+        global_senders.extend(temp_vec);
+    }
+
+}

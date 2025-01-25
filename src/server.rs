@@ -67,9 +67,7 @@ impl NetflowServer {
             }
             self.tx.send(senders).unwrap();
             
-           
         }
-
 
     }
 
@@ -660,12 +658,17 @@ mod tests {
             //60-63 pkts 00 02 length 00 04 (bytes)
             /////////////////////////////////////////////////////////////
 
-            let mut test_server = NetflowServer::new("10.0.0.40:2055");
+            let (tx , rx) = mpsc::channel();
+            let mut test_server = NetflowServer::new("10.0.0.40:2055", tx);
             let fake_data_len = fake_template_data.len();
             test_server.receive_buffer[..fake_data_len].copy_from_slice(&fake_template_data);
             let returned_template: NetflowTemplate = test_server.parse_flow_template(fake_data_len);
-            let result = true;
-            assert!(result);
+
+            let field_count = returned_template.field_count;
+            if field_count != Some(10) {
+                panic!("Field count isn't right");
+            }
+
     }
     
 }

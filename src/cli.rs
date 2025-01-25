@@ -10,10 +10,12 @@ use std::convert::TryInto;
 pub fn get_user_input(senders: &Vec<NetflowSender>) -> Result<String, std::io::Error> {
     if senders.is_empty() {
         println!("There are currently no senders to report data on");
+        //println!("\n");
         Err(Error::new(ErrorKind::NotFound, "Senders not found"))
     }
     else {
         println!("Please select one of the following senders");
+        //println!("\n");
         for s in senders {
             println!("{}",s.ip_addr);
         }
@@ -21,7 +23,6 @@ pub fn get_user_input(senders: &Vec<NetflowSender>) -> Result<String, std::io::E
         io::stdin().read_line(&mut answer).expect("Failed to read line");
         Ok(answer)
     }
-   
 }
 
 
