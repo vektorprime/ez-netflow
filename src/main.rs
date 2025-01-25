@@ -38,7 +38,7 @@ fn main() {
             Err(std::sync::mpsc::TryRecvError::Empty) => {
                 //println!("Nothing to receive, skipping");
                 thread::sleep(Duration::from_secs(1));
-                println!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+                clear_console();
                 println!("No new data");
                 Vec::new()
                 //println!("\n");

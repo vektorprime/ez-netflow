@@ -23,12 +23,13 @@ impl NetflowSender {
     //     }
     // }
 
-    pub fn report_flow_stats(&self) {
 
+    pub fn report_flow_stats(&self) {
           //look for existing flow and update
           for flow in &self.flow_stats {
             println!("Start flow data...");
             println!("Src IP is {} and Dst IP is {}", flow.src_and_dst_ip.0, flow.src_and_dst_ip.1 );
+            println!("Src Port is {} and Dst Port is {}", flow.src_and_dst_port.0, flow.src_and_dst_port.1);
             println!("Protocol is {}", flow.protocol);
             println!("Bytes/octets are {}", flow.in_octets );
             println!("Packets are {}", flow.in_packets);
@@ -38,12 +39,7 @@ impl NetflowSender {
     }
     
     pub fn parse_packet_to_flow(&mut self) {
-        let packet_count = self.flow_packets.len();
-        for _ in 0..packet_count {
-        
-            let packet_result = self.flow_packets.pop();
-            match packet_result {
-                Some(pkt) => {
+        while let Some(pkt) = self.flow_packets.pop() {
                     //println!("parsing packet to flow");
 
                     //get tuple
@@ -91,12 +87,11 @@ impl NetflowSender {
                         if flow.src_and_dst_ip == s_and_d_ip && 
                             flow.src_and_dst_port == s_and_d_port &&
                             flow.protocol == proto {
-
-                            //println!("updating existing flow");
-                            flow.in_octets += oct;
-                            flow.in_packets += pk;
-                            updated_flow = true;
-                        
+                                //println!("updating existing flow");
+                                flow.in_octets += oct;
+                                flow.in_packets += pk;
+                                updated_flow = true;
+                                break;
                         }
                     }
 
@@ -115,12 +110,12 @@ impl NetflowSender {
                         self.flow_stats.push(new_flow)
                     }
 
-                },
-                None => {
-                    //println!("Can't parse empty packet in parse_stats_on_packet, skipping");
-                    return;
-                }
-            };
+                
+                // None => {
+                //     //println!("Can't parse empty packet in parse_stats_on_packet, skipping");
+                //     return;
+                // }
+            
         }
     }
 }

@@ -41,9 +41,16 @@ pub fn show_sender_info(senders: &Vec<NetflowSender>, ip: Ipv4Addr) {
         if answer.trim().is_empty() { 
             confirmed_continue = true;
             //clear screen
-            println!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+            clear_console();
         };
         
     }
 
+}
+
+
+//found this fn to clear console
+
+pub fn clear_console() {
+    println!("\x1B[2J\x1B[1;1H");
 }

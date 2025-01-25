@@ -91,5 +91,4 @@ pub struct NetflowPacket {
     pub flowset_id: u16,
     pub flow_length: u16,
     pub flow_template: Option<NetflowTemplate>,
-
 }
