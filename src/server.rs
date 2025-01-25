@@ -2,13 +2,12 @@ use std::net::{UdpSocket, SocketAddr};
 use std::net::Ipv4Addr;
 use std::convert::TryInto;
 use std::io::{Error,ErrorKind};
-
+use std::sync::mpsc;
 
 use crate::fields::*;
 use crate::senders::*;
 use crate::templates::*;
 use crate::utils::*;
-
 
 
 
@@ -20,19 +19,20 @@ pub struct NetflowServer {
     // pub byte_count: usize,
     // pub source_address: SocketAddr,
     pub senders: Vec<NetflowSender>,
+    pub tx: mpsc::Sender<Vec<NetflowSender>>
 }
 
 
 
-
 impl NetflowServer {
-    pub fn new(addr_and_port: &str) -> Self {
+    pub fn new(addr_and_port: &str, tx_channel: mpsc::Sender<Vec<NetflowSender>>) -> Self {
         NetflowServer {
             initial_template_received: false,
             socket: UdpSocket::bind(addr_and_port)
                 .expect("Unable to bind socket"),
             receive_buffer: [0; 2500],
             senders: Vec::new(),
+            tx: tx_channel
         }
     }
 
@@ -50,16 +50,23 @@ impl NetflowServer {
         loop {
             //only account for 1 sender atm
             let (byte_count, source_address) = self.wait_for_netflow_data();
-            let sender_index =  self.match_sender(source_address).expect("Sender not found");
+            let sender_ip = convert_socket_to_ipv4(source_address);
+            let sender_index =  self.match_sender(sender_ip).expect("Sender not found");
             self.parse_data_to_packet(byte_count, sender_index);
             //let test: &mut NetflowSender = &mut self.senders[0];
             let senders_len = self.senders.len();
             for x in 0..senders_len {
                 self.senders[x].parse_packet_to_flow();
-                self.senders[x].report_flow_stats();
+                //self.senders[x].report_flow_stats();
             }
-            
 
+            let mut senders: Vec<NetflowSender> = Vec::new();
+            for s in &self.senders {
+                let sender_clone = s.clone();
+                senders.push(sender_clone);
+            }
+            self.tx.send(senders).unwrap();
+            
            
         }
 
@@ -74,7 +81,7 @@ impl NetflowServer {
         let vec_len = self.senders.len();
         for x in 0..vec_len {
             if self.senders[x] .ip_addr == new_sender_ip {
-                println!("Found the source in the senders vector");
+                //println!("Found the source in the senders vector");
                 found_sender = true;
                 break;
             }
@@ -96,78 +103,78 @@ impl NetflowServer {
     fn decode_field_order(&self, field_id: u16, received_template: &mut NetflowTemplate) {
         match field_id {
             1 => {
-                println!("Field id 0 is IN_BYTES");
+                //println!("Field id 0 is IN_BYTES");
                 //received_template.in_octets = Some(FlowField::InOctets());
                 received_template.order_vec.push(FlowField::InOctets);
                 
             },
             2 => {
-                println!("Field id 1 is IN_PKTS");
+                //println!("Field id 1 is IN_PKTS");
                 //received_template.in_packets = Some(U32Field::Enabled(order));
                 received_template.order_vec.push(FlowField::InPkts);
             },
             3 => {
-                println!("Field id 2 is FLOWS");
+                //println!("Field id 2 is FLOWS");
                 //received_template.flows = Some(U32Field::Enabled(order));
                 received_template.order_vec.push(FlowField::Flows);
             },
             4 => {
-                println!("Field id 3 is PROTOCOL");
+                //println!("Field id 3 is PROTOCOL");
                 //received_template.protocol = Some(U8Field::Enabled(order));
                 received_template.order_vec.push(FlowField::Protocol);
             },
             5 => {
-                println!("Field id 4 is SRC_TOS");
+                //println!("Field id 4 is SRC_TOS");
                 //received_template.src_tos = Some(U8Field::Enabled(order));
                 received_template.order_vec.push(FlowField::SrcTOS);
             },
             6 => {
-                println!("Field id 5 is TCP_FLAGS");
+                //println!("Field id 5 is TCP_FLAGS");
                 //received_template.tcp_flags = Some(U8Field::Enabled(order));
                 received_template.order_vec.push(FlowField::TCPFlags);
             },
             7 => {
-                println!("Field id 6 is SRC_PORT");
+                //println!("Field id 6 is SRC_PORT");
                 //received_template.src_port = Some(FlowField::SrcPort(Some(U16Field::Enabled(order))));
                 received_template.order_vec.push(FlowField::SrcPort);
             },
             8 => {
-                println!("Field id 7 is SRC_ADDR");
+                //println!("Field id 7 is SRC_ADDR");
                 //received_template.src_addr = Some(FlowField::SrcAddr);
                 received_template.order_vec.push(FlowField::SrcAddr);
             },
             9 => {
-                println!("Field id 8 is SRC_MASK");
+                //println!("Field id 8 is SRC_MASK");
                 //received_template.src_mask = Some(U8Field::Enabled(order));
                 received_template.order_vec.push(FlowField::SrcMask);
             },
             10 => {
-                println!("Field id 9 is INPUT_SNMP");
+                //println!("Field id 9 is INPUT_SNMP");
                 //received_template.input_snmp = Some(U16Field::Enabled(order));
                 received_template.order_vec.push(FlowField::InputSNMP);
             },
             11 => {
-                println!("Field id 10 is DST_PORT");
+                //println!("Field id 10 is DST_PORT");
                 //received_template.dst_port = Some(U16Field::Enabled(order));
                 received_template.order_vec.push(FlowField::DstPort);
             },
             12 => {
-                println!("Field id 11 is DST_ADDR");
+                //println!("Field id 11 is DST_ADDR");
                 //received_template.dst_addr = Some(Ipv4Field::Enabled(order));
                 received_template.order_vec.push(FlowField::DstAddr);
             },
             13 => {
-                println!("Field id 12 is DST_MASK");
+                //println!("Field id 12 is DST_MASK");
                 //received_template.dst_mask = Some(U8Field::Enabled(order));
                 received_template.order_vec.push(FlowField::DstMask);
             },
             14 => {
-                println!("Field id 13 is OUTPUT_SNMP");
+                //println!("Field id 13 is OUTPUT_SNMP");
                 //received_template.output_snmp = Some(U16Field::Enabled(order));
                 received_template.order_vec.push(FlowField::OutputSNMP);
             },
             15 => {
-                println!("Field id 14 is NEXT_HOP");
+                //println!("Field id 14 is NEXT_HOP");
                 //received_template.ipv4_next_hop = Some(Ipv4Field::Enabled(order));
                 received_template.order_vec.push(FlowField::NextHop);
             },
@@ -289,13 +296,13 @@ impl NetflowServer {
             FlowField::InOctets => {
                 let field_array: [u8; 4] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data = u32::from_be_bytes(field_array);
-                println!("The field is InOctets and the converted payload is {}",field_data );
+                //println!("The field is InOctets and the converted payload is {}",field_data );
                 new_packet.in_octets = Some(U32Field::Value(field_data));
             },
             FlowField::InPkts => {
                 let field_array: [u8; 4] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data = u32::from_be_bytes(field_array);
-                println!("The field is InPkts and the converted payload is {}",field_data );
+                //println!("The field is InPkts and the converted payload is {}",field_data );
                 new_packet.in_packets = Some(U32Field::Value(field_data));
             },
             // FlowField::Flows => {
@@ -304,76 +311,76 @@ impl NetflowServer {
             FlowField::Protocol => {
                 let field_array: [u8; 1] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data = u8::from_be_bytes(field_array);
-                println!("The field is Protocol and the converted payload is {}",field_data);
+                //println!("The field is Protocol and the converted payload is {}",field_data);
                 new_packet.protocol = Some(U8Field::Value(field_data));
             },
             FlowField::SrcTOS => {
                 let field_array: [u8; 1] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data = u8::from_be_bytes(field_array);
-                println!("The field is SrcTOS and the converted payload is {}",field_data);
+                //println!("The field is SrcTOS and the converted payload is {}",field_data);
                 new_packet.src_tos = Some(U8Field::Value(field_data));
             },
             FlowField::TCPFlags => {
                 let field_array: [u8; 1] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data = u8::from_be_bytes(field_array);
-                println!("The field is TCPFlags and the converted payload is {}",field_data);
+                //println!("The field is TCPFlags and the converted payload is {}",field_data);
                 new_packet.tcp_flags = Some(U8Field::Value(field_data));
             },
             FlowField::SrcPort => {
                 let field_array: [u8; 2] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data = u16::from_be_bytes(field_array);
-                println!("The field is SrcPort and the converted payload is {}",field_data );
+                //println!("The field is SrcPort and the converted payload is {}",field_data );
                 new_packet.src_port = Some(U16Field::Value(field_data));
             },
             FlowField::SrcAddr => {
                 let field_array: [u8; 4] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data = u32::from_be_bytes(field_array);
                 let field_data_ipv4: Ipv4Addr = Ipv4Addr::from_bits(field_data);
-                println!("The field is SrcAddr and the converted payload is {}", field_data_ipv4);
+                //println!("The field is SrcAddr and the converted payload is {}", field_data_ipv4);
                 new_packet.src_addr = Some(Ipv4Field::Value(field_data_ipv4));
             },
             FlowField::SrcMask => {
                 let field_array: [u8; 1] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data = u8::from_be_bytes(field_array);
-                println!("The field is SrcMask and the converted payload is {}",field_data);
+                //println!("The field is SrcMask and the converted payload is {}",field_data);
                 new_packet.src_mask = Some(U8Field::Value(field_data));
             },
             FlowField::InputSNMP => {
                 let field_array: [u8; 4] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data = u32::from_be_bytes(field_array);
-                println!("The field is InputSNMP and the converted payload is {}",field_data );
+                //println!("The field is InputSNMP and the converted payload is {}",field_data );
                 new_packet.input_snmp = Some(U32Field::Value(field_data));
             },
             FlowField::DstPort => {
                 let field_array: [u8; 2] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data = u16::from_be_bytes(field_array);
-                println!("The field is DstPort and the converted payload is {}",field_data );
+                //println!("The field is DstPort and the converted payload is {}",field_data );
                 new_packet.dst_port = Some(U16Field::Value(field_data));
             },
             FlowField::DstAddr => {
                 let field_array: [u8; 4] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data: u32 = u32::from_be_bytes(field_array);
                 let field_data_ipv4: Ipv4Addr = Ipv4Addr::from_bits(field_data);
-                println!("The field is DstAddr and the converted payload is {}", field_data_ipv4);
+                //println!("The field is DstAddr and the converted payload is {}", field_data_ipv4);
                 new_packet.dst_addr = Some(Ipv4Field::Value(field_data_ipv4));
             },
             FlowField::DstMask => {
                 let field_array: [u8; 1] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data = u8::from_be_bytes(field_array);
-                println!("The field is DstMask and the converted payload is {}",field_data);
+                //println!("The field is DstMask and the converted payload is {}",field_data);
                 new_packet.dst_mask = Some(U8Field::Value(field_data));
             },
             FlowField::OutputSNMP => {
                 let field_array: [u8; 4] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data = u32::from_be_bytes(field_array);
-                println!("The field is OutputSNMP and the converted payload is {}",field_data );
+                //println!("The field is OutputSNMP and the converted payload is {}",field_data );
                 new_packet.output_snmp = Some(U32Field::Value(field_data));
             },
             FlowField::NextHop => {
                 let field_array: [u8; 4] = field_slice.try_into().expect("Unable to convert field_slice to array");
                 let field_data_u32: u32 = u32::from_be_bytes(field_array);
                 let field_data_ipv4: Ipv4Addr = Ipv4Addr::from_bits(field_data_u32);
-                println!("The field is SrcAddr and the converted payload is {}", field_data_ipv4);
+                //println!("The field is SrcAddr and the converted payload is {}", field_data_ipv4);
                 new_packet.next_hop = Some(Ipv4Field::Value(field_data_ipv4));
             },
             _ => {
@@ -401,7 +408,7 @@ impl NetflowServer {
         let data_len_slice: &[u8]  = &message[22..24];
         let data_len_array: [u8; 2] = data_len_slice.try_into().expect("Unable to convert data_len_slice to array");
         let data_len: u16 = u16::from_be_bytes(data_len_array);
-        println!("The payload data_len is {data_len}");
+        //println!("The payload data_len is {data_len}");
         data_len
     }
 
@@ -410,7 +417,7 @@ impl NetflowServer {
         let template_id_slice: &[u8]  = &message[24..26];
         let template_id_array: [u8; 2] = template_id_slice.try_into().expect("Unable to convert template_id_slice to array");
         let template_id: u16 = u16::from_be_bytes(template_id_array);
-        println!("The payload template_id is {template_id}");
+        //println!("The payload template_id is {template_id}");
         template_id
     }
 
@@ -419,7 +426,7 @@ impl NetflowServer {
         let template_id_slice: &[u8]  = &message[20..22];
         let template_id_array: [u8; 2] = template_id_slice.try_into().expect("Unable to convert template_id_slice to array");
         let template_id: u16 = u16::from_be_bytes(template_id_array);
-        println!("The payload template_id is {template_id}");
+        //println!("The payload template_id is {template_id}");
         template_id
     }
 
@@ -428,7 +435,7 @@ impl NetflowServer {
         let field_count_slice: &[u8]  = &message[26..28];
         let field_count_array: [u8; 2] = field_count_slice.try_into().expect("Unable to convert field_count_slice to array");
         let field_count: u16 = u16::from_be_bytes(field_count_array);
-        println!("The payload field_count is {field_count}");
+        //println!("The payload field_count is {field_count}");
         field_count
     }
 
@@ -440,7 +447,7 @@ impl NetflowServer {
         //thus, if the u16 at byte 20 and 21 is 0 it's a template, else it's data
     
         let message: &[u8]  = &self.receive_buffer[..byte_count];
-        println!("Parsing...");
+        //println!("Parsing...");
 
         let mut received_template = NetflowTemplate::default();
         //flowset length
@@ -464,7 +471,7 @@ impl NetflowServer {
             let field_slice: &[u8]  = &message[start_slice..end_slice];
             let field_array: [u8; 2] = field_slice.try_into().expect("Unable to convert field_slice to array");
             let field_data: u16 = u16::from_be_bytes(field_array);
-            println!("The payload field_slice for field {x} is {field_data}");
+            //println!("The payload field_slice for field {x} is {field_data}");
             self.decode_field_order(field_data, &mut received_template);
             start_slice += inc_size;
             end_slice += inc_size;
@@ -481,7 +488,7 @@ impl NetflowServer {
 
     pub fn parse_data_to_packet(&mut self, byte_count: usize, sender_index: usize) {
         let message: &[u8]  = &self.receive_buffer[..byte_count];
-        println!("Parsing...");
+        //println!("Parsing...");
 
         //flowset length
         self.parse_flow_length(message);
@@ -491,7 +498,7 @@ impl NetflowServer {
         //template id
         let template_id = self.parse_flow_template_id_from_data(message);
         if template_id != self.senders[sender_index].active_template.id.expect("sender.active_template.id is None") {
-            println!("The flow data template_id does not match the sender.active_template.id");
+            //println!("The flow data template_id does not match the sender.active_template.id");
             return;
         }
 
@@ -507,7 +514,7 @@ impl NetflowServer {
         let mut initial_field_parsed = false;
         let vec_len: u16 = self.senders[sender_index].active_template.order_vec.len().try_into().unwrap();
         if field_count != vec_len {
-            println!("The order_vec length is not equal to the field_count, cannot parse or else we'll crash");
+            //println!("The order_vec length is not equal to the field_count, cannot parse or else we'll crash");
             return;
         }
 
@@ -545,10 +552,10 @@ impl NetflowServer {
             let (byte_count, source_address) = self.start_receiving();
             match check_packet_size(byte_count) {
                 Ok(x) => {
-                    println!("The packet size is valid");
+                    //println!("The packet size is valid");
                 },
                 Err(e) => {
-                    println!("The packet size too small, skipping this packet");
+                    //println!("The packet size too small, skipping this packet");
                     continue;
                 }
             }
@@ -556,11 +563,11 @@ impl NetflowServer {
             let received_message: &[u8]  = &self.receive_buffer[..byte_count];
             //byte 20 and 21 being zeroed means this is a template
             if received_message[20] == 0 && received_message[21] == 0 {
-                println!("Received data is a flow template");
+                //println!("Received data is a flow template");
                 return (byte_count, source_address);
             }
             else {
-                println!("Received data is not a flow template, waiting for template");
+                //println!("Received data is not a flow template, waiting for template");
             }
         }
       
@@ -573,10 +580,10 @@ impl NetflowServer {
             let (byte_count, source_address) = self.start_receiving();
             match check_packet_size(byte_count) {
                 Ok(x) => {
-                    println!("The packet size is valid");
+                    //println!("The packet size is valid");
                 },
                 Err(e) => {
-                    println!("The packet size too small, skipping this packet");
+                    //println!("The packet size too small, skipping this packet");
                     continue;
                 }
             }
@@ -584,22 +591,21 @@ impl NetflowServer {
             let received_message: &[u8]  = &self.receive_buffer[..byte_count];
             //byte 20 and 21 being zeroed means this is a template
             if received_message[20] != 0 && received_message[21] != 0 {
-                println!("Received data is a netflow data");
+                //println!("Received data is a netflow data");
                 return (byte_count, source_address);
             }
             else {
-                println!("Received data is not netflow data");
+                //println!("Received data is not netflow data");
             }
         }
     }
 
-    pub fn match_sender(&mut self, source_address: SocketAddr) -> std::result::Result<usize, std::io::Error> {
-        let sender_ip = convert_socket_to_ipv4(source_address);
+    pub fn match_sender(&mut self, sender_ip: Ipv4Addr) -> std::result::Result<usize, std::io::Error> {
         let vec_len = self.senders.len();
         for x in 0..vec_len {
             if self.senders[x] .ip_addr == sender_ip {
-                println!("Found the source in the senders vector");
-                println!("Sender is {sender_ip}");
+                //println!("Found the source in the senders vector");
+                //println!("Sender is {sender_ip}");
                 // let sender = self.senders[x].clone();
                 // return Ok(&sender);
                 return Ok(x);
@@ -608,9 +614,6 @@ impl NetflowServer {
         Err(Error::new(ErrorKind::AddrNotAvailable, "Sender not found"))
     }
         
-
-    
-    
 
 }
 

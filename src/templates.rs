@@ -69,6 +69,7 @@ pub struct NetflowTemplate {
 
 
 
+#[derive(Clone)]
 pub struct NetFlow {
     pub src_and_dst_ip: (Ipv4Addr, Ipv4Addr),
     pub src_and_dst_port: (u16, u16),

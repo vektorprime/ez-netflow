@@ -3,12 +3,15 @@ use crate::templates::*;
 use crate::fields::*;
 
 
+
+#[derive(Clone)]
 pub struct NetflowSender {
     pub ip_addr: Ipv4Addr,
     pub active_template: NetflowTemplate,
     pub flow_packets: Vec<NetflowTemplate>,
     pub flow_stats:  Vec<NetFlow>,
 }
+
 
 impl NetflowSender {
     // pub fn new(new_sender_ip: Ipv4Addr, template: NetflowTemplate) -> Self {
@@ -20,10 +23,10 @@ impl NetflowSender {
     //     }
     // }
 
-    pub fn report_flow_stats(&mut self) {
+    pub fn report_flow_stats(&self) {
 
           //look for existing flow and update
-          for flow in &mut self.flow_stats {
+          for flow in &self.flow_stats {
             println!("Start flow data...");
             println!("Src IP is {} and Dst IP is {}", flow.src_and_dst_ip.0, flow.src_and_dst_ip.1 );
             println!("Protocol is {}", flow.protocol);
@@ -31,7 +34,6 @@ impl NetflowSender {
             println!("Packets are {}", flow.in_packets);
             println!("End flow data");
 
-            
         }
     }
     
@@ -39,7 +41,7 @@ impl NetflowSender {
         let packet_result = self.flow_packets.pop();
         match packet_result {
             Some(pkt) => {
-                println!("parsing packet to flow");
+                //println!("parsing packet to flow");
 
                 //get tuple
                 //Need to handle optional variants
@@ -87,7 +89,7 @@ impl NetflowSender {
                         flow.src_and_dst_port == s_and_d_port &&
                         flow.protocol == proto {
 
-                        println!("updating existing flow");
+                        //println!("updating existing flow");
                         flow.in_octets += oct;
                         flow.in_packets+= pk;
                         updated_flow = true;
@@ -98,7 +100,7 @@ impl NetflowSender {
                 //no flows
                 //create new flow
                 if !updated_flow {
-                    println!("flow_stats is empty, creating new flow");
+                    //println!("flow_stats is empty, creating new flow");
                     let new_flow = NetFlow {
                         src_and_dst_ip: s_and_d_ip,
                         src_and_dst_port: s_and_d_port,
@@ -112,7 +114,7 @@ impl NetflowSender {
 
             },
             None => {
-                println!("Can't parse empty packet in parse_stats_on_packet, skipping");
+                //println!("Can't parse empty packet in parse_stats_on_packet, skipping");
                 return;
             }
         };
