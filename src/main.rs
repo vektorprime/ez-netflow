@@ -29,7 +29,7 @@ use crate::sql::*;
 fn main() {
     
     //secure the db access for multi-thread use
-    let mut db_conn_cli: std::sync::Arc<Mutex<Connection>>  = Arc::new(Mutex::new(setup_db()));
+    let mut db_conn_cli: std::sync::Arc<Mutex<Connection>>  = Arc::new(Mutex::new(setup_db(ConnType::InFile)));
     let db_conn_srv: std::sync::Arc<Mutex<Connection>>  = Arc::clone(&db_conn_cli);
 
 

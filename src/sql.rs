@@ -5,12 +5,21 @@ use crate::{senders::*, templates::NetFlow};
 use rusqlite::{Connection, params};
 use tabled::{builder::Builder, settings::Style};
 
-pub fn setup_db() -> Connection {
-    //create db in mem
-    let db_conn = Connection::open_in_memory().expect("Unable to open SQLITE db connection in memory");
+pub enum ConnType {
+    InMemory,
+    InFile,
+}
 
-    //create db in file and save
-    //let db_conn = Connection::open("./eznf_db.db3").expect("Unable to open SQLITE db connection in memory");
+pub fn setup_db(conn_type: ConnType) -> Connection {
+
+    let db_conn: Connection = match conn_type {
+        ConnType::InMemory => {
+            Connection::open_in_memory().expect("Unable to open SQLITE db connection in memory")
+        },
+        ConnType::InFile => {
+            Connection::open("./eznf_db.db").expect("Unable to open SQLITE db connection in memory")
+        }
+    };
 
     db_conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
 
