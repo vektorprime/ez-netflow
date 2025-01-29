@@ -26,3 +26,7 @@ pub fn convert_socket_to_ipv4(source_address: SocketAddr) -> Ipv4Addr {
 pub fn convert_string_to_ipv4(ip_string: String) -> std::result::Result<Ipv4Addr, AddrParseError> {
      Ipv4Addr::from_str(ip_string.as_str().trim())
 }
+
+pub fn convert_ipv4_to_string(ip: Ipv4Addr) -> String {
+    ip.to_string()
+}

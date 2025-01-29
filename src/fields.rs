@@ -6,6 +6,11 @@ pub enum NetflowVersion {
     V9(u16)
 }
 
+pub enum PacketType {
+    Template,
+    Data
+}
+
 //enabled is the order
 //value is actual payload
 #[derive(Copy, Clone)]

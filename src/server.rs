@@ -2,74 +2,78 @@ use std::net::{UdpSocket, SocketAddr};
 use std::net::Ipv4Addr;
 use std::convert::TryInto;
 use std::io::{Error,ErrorKind};
-use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+
+use rusqlite::{Connection};
 
 use crate::fields::*;
 use crate::senders::*;
 use crate::templates::*;
 use crate::utils::*;
-
-
+use crate::sql::*;
 
 pub struct NetflowServer {
     pub initial_template_received: bool,
     pub socket: UdpSocket,
     pub receive_buffer: [u8; 2500],
+    byte_count: usize,
     // //may need to move these around as a tuple for multiple netflow senders
     // pub byte_count: usize,
     // pub source_address: SocketAddr,
     pub senders: Vec<NetflowSender>,
-    pub tx: mpsc::Sender<Vec<NetflowSender>>
+    pub db_conn: Arc<Mutex<Connection>>
 }
 
 
 
 impl NetflowServer {
-    pub fn new(addr_and_port: &str, tx_channel: mpsc::Sender<Vec<NetflowSender>>) -> Self {
+    pub fn new(addr_and_port: &str, db_conn_srv: Arc<Mutex<Connection>>) -> Self {
         NetflowServer {
             initial_template_received: false,
             socket: UdpSocket::bind(addr_and_port)
                 .expect("Unable to bind socket"),
             receive_buffer: [0; 2500],
+            byte_count: 0,
             senders: Vec::new(),
-            tx: tx_channel
+            db_conn: db_conn_srv
         }
     }
 
     pub fn run(&mut self) {
-            //todo
-            //parse_flow_template
-            //build netflow packet
-            //update sender
-            //receive and parse data
-
-        let (byte_count, source_address) =  self.wait_for_initial_template();
-        let template: NetflowTemplate = self.parse_flow_template(byte_count);
+        let source_address =  self.wait_for_initial_template();
+        let template: NetflowTemplate = self.parse_flow_template();
         self.update_or_create_sender(source_address, template);
 
         loop {
-            //only account for 1 sender atm
-            let (byte_count, source_address) = self.wait_for_netflow_data();
+            let source_address = self.start_receiving();
             let sender_ip = convert_socket_to_ipv4(source_address);
-            let sender_index =  self.match_sender(sender_ip).expect("Sender not found");
-            self.parse_data_to_packet(byte_count, sender_index);
-            //let test: &mut NetflowSender = &mut self.senders[0];
-            let senders_len = self.senders.len();
-            //moved these functions over to the cli view otherwise the packets get consumed and I can't report on them later
-            // for x in 0..senders_len {
-            //     self.senders[x].parse_packet_to_flow();
-            //     self.senders[x].report_flow_stats();
-            // }
-
-            let mut senders: Vec<NetflowSender> = Vec::new();
-            for s in &self.senders {
-                let sender_clone = s.clone();
-                senders.push(sender_clone);
+            let packet_type = self.determine_packet_type();
+            match packet_type {
+                PacketType::Template => {
+                    let template: NetflowTemplate = self.parse_flow_template();
+                    self.update_or_create_sender(source_address, template);
+                },
+                PacketType::Data => {
+                    let sender_index_result =  self.match_sender(sender_ip);
+                    let sender_index = match sender_index_result {
+                        Ok(o) => o,
+                        Err(e) => {
+                            continue;
+                        }
+                    };
+                    self.parse_data_to_packet(self.byte_count, sender_index);
+                    //let test: &mut NetflowSender = &mut self.senders[0];
+                    let senders_len = self.senders.len();
+         
+                    //re-enabled these functions so that I can store the data in sqlite and query them in cli.rs
+                    for x in 0..senders_len {
+                        self.senders[x].parse_packet_to_flow();
+                        self.senders[x].prepare_and_update_flow_in_db(&mut self.db_conn);
+                    }
+                },
             }
-            self.tx.send(senders).unwrap();
             
         }
-
     }
 
     pub fn update_or_create_sender(&mut self, source_address: SocketAddr, template: NetflowTemplate) {
@@ -79,14 +83,15 @@ impl NetflowServer {
         let new_sender_ip = convert_socket_to_ipv4(source_address);
         let vec_len = self.senders.len();
         for x in 0..vec_len {
-            if self.senders[x] .ip_addr == new_sender_ip {
+            if self.senders[x].ip_addr == new_sender_ip {
                 //println!("Found the source in the senders vector");
                 found_sender = true;
                 break;
             }
         }
         if !found_sender {
-            
+            let ip_as_str = convert_ipv4_to_string(new_sender_ip);
+            update_senders_in_db(&mut self.db_conn, ip_as_str.as_str());
             let new_sender = NetflowSender {
                 ip_addr: new_sender_ip,
                 active_template: template,
@@ -388,9 +393,11 @@ impl NetflowServer {
         }
     }
 
-    pub fn start_receiving(&mut self) -> (usize, SocketAddr) {
-        self.socket.recv_from(&mut self.receive_buffer)
-            .expect("Error receiving from the socket")
+    pub fn start_receiving(&mut self) -> (SocketAddr) {
+        let (byte_count, socket) = self.socket.recv_from(&mut self.receive_buffer)
+            .expect("Error receiving from the socket");
+        self.byte_count = byte_count;
+        socket
     }
 
 
@@ -439,13 +446,13 @@ impl NetflowServer {
     }
 
 
-    pub fn parse_flow_template(&mut self, byte_count: usize) -> NetflowTemplate {
+    pub fn parse_flow_template(&mut self) -> NetflowTemplate {
         //if flowset id == 0, it's a template
         //the udp receive func starts us at byte 30 because that's the udp payload
         //byte 20 and 21 in the payload are the flowset ID,
         //thus, if the u16 at byte 20 and 21 is 0 it's a template, else it's data
     
-        let message: &[u8]  = &self.receive_buffer[..byte_count];
+        let message: &[u8]  = &self.receive_buffer[..self.byte_count];
         //println!("Parsing...");
 
         let mut received_template = NetflowTemplate::default();
@@ -542,14 +549,24 @@ impl NetflowServer {
     }
 
 
+    pub fn determine_packet_type(&self) -> PacketType {
+        let received_message: &[u8]  = &self.receive_buffer[..self.byte_count];
+        //byte 20 and 21 being zeroed means this is a template
+        if received_message[20] == 0 && received_message[21] == 0 {
+           PacketType::Template
+        }
+        else {
+            PacketType::Data
+        }
+        
+    }
 
-
-    pub fn wait_for_initial_template(&mut self) -> (usize, SocketAddr)  {
+    pub fn wait_for_initial_template(&mut self) -> SocketAddr  {
 
         //need initial template data
         loop {
-            let (byte_count, source_address) = self.start_receiving();
-            match check_packet_size(byte_count) {
+            let source_address = self.start_receiving();
+            match check_packet_size(self.byte_count) {
                 Ok(x) => {
                     //println!("The packet size is valid");
                 },
@@ -559,11 +576,11 @@ impl NetflowServer {
                 }
             }
             
-            let received_message: &[u8]  = &self.receive_buffer[..byte_count];
+            let received_message: &[u8]  = &self.receive_buffer[..self.byte_count];
             //byte 20 and 21 being zeroed means this is a template
             if received_message[20] == 0 && received_message[21] == 0 {
                 //println!("Received data is a flow template");
-                return (byte_count, source_address);
+                return source_address;
             }
             else {
                 //println!("Received data is not a flow template, waiting for template");
@@ -573,11 +590,11 @@ impl NetflowServer {
         //account for template changing
     }
 
-    pub fn wait_for_netflow_data(&mut self) -> (usize, SocketAddr) {
+    pub fn wait_for_netflow_data(&mut self) -> SocketAddr {
          //need initial template data
          loop {
-            let (byte_count, source_address) = self.start_receiving();
-            match check_packet_size(byte_count) {
+            let source_address = self.start_receiving();
+            match check_packet_size(self.byte_count) {
                 Ok(x) => {
                     //println!("The packet size is valid");
                 },
@@ -587,11 +604,11 @@ impl NetflowServer {
                 }
             }
             
-            let received_message: &[u8]  = &self.receive_buffer[..byte_count];
+            let received_message: &[u8]  = &self.receive_buffer[..self.byte_count];
             //byte 20 and 21 being zeroed means this is a template
             if received_message[20] != 0 && received_message[21] != 0 {
                 //println!("Received data is a netflow data");
-                return (byte_count, source_address);
+                return source_address;
             }
             else {
                 //println!("Received data is not netflow data");
@@ -602,7 +619,7 @@ impl NetflowServer {
     pub fn match_sender(&mut self, sender_ip: Ipv4Addr) -> std::result::Result<usize, std::io::Error> {
         let vec_len = self.senders.len();
         for x in 0..vec_len {
-            if self.senders[x] .ip_addr == sender_ip {
+            if self.senders[x].ip_addr == sender_ip {
                 //println!("Found the source in the senders vector");
                 //println!("Sender is {sender_ip}");
                 // let sender = self.senders[x].clone();
@@ -620,6 +637,22 @@ impl NetflowServer {
 
 #[cfg(test)]
 mod tests {
+
+    pub fn setup_db() -> Connection {
+        //create db
+        let db_conn = Connection::open_in_memory().unwrap();
+    
+        //create tables
+        db_conn.execute(" CREATE TABLE IF NOT EXISTS senders (
+            id INTEGER PRIMARY KEY,
+            sender_ip TEXT NOT NULL
+            )",
+            [],
+            ).unwrap();
+    
+        db_conn
+    }
+    
 
     use super::*;
     
@@ -659,8 +692,11 @@ mod tests {
             //60-63 pkts 00 02 length 00 04 (bytes)
             /////////////////////////////////////////////////////////////
 
-            let (tx , rx) = mpsc::channel();
-            let mut test_server = NetflowServer::new("10.0.0.40:2055", tx);
+
+            //moving from mpsc to sqlite
+            //let (tx , rx) = mpsc::channel();
+            let db_conn = Arc::new(Mutex::new(setup_db()));
+            let mut test_server = NetflowServer::new("10.0.0.40:2055", db_conn);
             let fake_data_len = fake_template_data.len();
             test_server.receive_buffer[..fake_data_len].copy_from_slice(&fake_template_data);
             let returned_template: NetflowTemplate = test_server.parse_flow_template(fake_data_len);

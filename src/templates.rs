@@ -76,6 +76,7 @@ pub struct NetFlow {
     pub protocol: u8,
     pub in_octets: u32,
     pub in_packets: u32,
+    pub in_db: bool,
 }
 
 

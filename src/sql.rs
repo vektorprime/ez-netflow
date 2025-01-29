@@ -1,0 +1,158 @@
+
+use std::sync::{Arc, Mutex, MutexGuard};
+use crate::{senders::*, templates::NetFlow};
+
+use rusqlite::{Connection, params};
+use tabled::{builder::Builder, settings::Style};
+
+pub fn setup_db() -> Connection {
+    //create db in mem
+    let db_conn = Connection::open_in_memory().expect("Unable to open SQLITE db connection in memory");
+
+    //create db in file and save
+    //let db_conn = Connection::open("./eznf_db.db3").expect("Unable to open SQLITE db connection in memory");
+
+    db_conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
+
+    //create tables
+    db_conn.execute("CREATE TABLE IF NOT EXISTS senders (
+        ip TEXT PRIMARY KEY
+        )",
+        [],
+        ).expect("Unable to create senders table in DB");
+
+    db_conn.execute("CREATE TABLE IF NOT EXISTS flows (
+        id INTEGER PRIMARY KEY,
+        sender_ip TEXT NOT NULL,
+        src_addr TEXT,
+        dst_addr TEXT,
+        protocol INTEGER,
+        src_port INTEGER,
+        dst_port INTEGER,
+        tcp_flags INTEGER,
+        input_snmp INTEGER,
+        output_snmp INTEGER,
+        in_octets INTEGER,
+        in_pkts INTEGER,
+        src_tos INTEGER,
+        src_mask INTEGER,
+        dst_mask INTEGER,
+        next_hop TEXT,
+         FOREIGN KEY (sender_ip) REFERENCES senders(ip)
+        )",
+        [],
+        ).expect("Unable to create flows table in DB");
+
+    db_conn
+}
+
+pub fn update_senders_in_db(db_conn: &mut Arc<Mutex<Connection>>, sender_ip: &str) {
+    let db_conn_unlocked: MutexGuard<Connection> = db_conn.lock().unwrap();
+    db_conn_unlocked.execute( 
+        "INSERT INTO senders (ip) VALUES (?)",
+        [sender_ip.to_string()],
+        ).expect("Unable to execute SQL in update_senders_in_db");
+}
+
+
+pub fn create_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &String) {
+    db_conn.execute( 
+        "INSERT INTO flows 
+            (sender_ip, src_addr, dst_addr, src_port, dst_port, protocol, in_octets, in_pkts) 
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        (sender_ip.to_string(), 
+            flow.src_and_dst_ip.0.to_string(), 
+            flow.src_and_dst_ip.1.to_string(),
+            flow.src_and_dst_port.0, 
+            flow.src_and_dst_port.1, 
+            flow.protocol, 
+            flow.in_octets, 
+            flow.in_packets),
+        ).expect("Unable to execute SQL in create_flow_in_db");
+}
+
+pub fn update_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &String) {
+    db_conn.execute( 
+        "UPDATE flows
+            SET in_octets = ?7, in_pkts = ?8
+            WHERE sender_ip = ?1
+            AND src_addr = ?2
+            AND dst_addr = ?3
+            AND src_port = ?4
+            AND dst_port = ?5
+            AND protocol = ?6",
+        params![sender_ip.to_string(), 
+            flow.src_and_dst_ip.0.to_string(), 
+            flow.src_and_dst_ip.1.to_string(),
+            flow.src_and_dst_port.0, 
+            flow.src_and_dst_port.1, 
+            flow.protocol, 
+            flow.in_octets, 
+            flow.in_packets]
+        ).expect("Unable to execute SQL in update_flow_in_db");
+}
+
+pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>) -> tabled::Table {
+
+    let mut builder = Builder::new();
+    builder.push_record([
+        "sender_ip", 
+        "src_addr", 
+        "dst_addr", 
+        "protocol", 
+        "src_port", 
+        "dst_port", 
+        "in_pkts", 
+        "in_bytes"
+        ]);
+    
+    let mut conn: MutexGuard<Connection> = db_conn_cli.lock().unwrap();
+    let mut stmt: rusqlite::Statement = conn.prepare("SELECT * FROM flows")
+        .expect("Unable to prepare query");
+
+    let mut rows = stmt.query([])
+        .expect("Unable to query rows");
+
+       while let Some(row) = rows.next().expect("no more rows") {
+          let sender_ip: String = row.get(1).expect("Unable to open column 1");
+          //println!("sender_ip is {sender_ip}");
+
+          let src_addr: String = row.get(2).expect("Unable to open column 2");
+          //println!("src_addr is {src_addr}");
+
+          let dst_addr: String = row.get(3).expect("Unable to open column 3");
+          //println!("dst_addr is {dst_addr}");
+
+          let protocol: i32 = row.get(4).expect("Unable to open column 4");
+          //println!("protocol is {protocol}");
+
+          let src_port: i32 = row.get(5).expect("Unable to open column 5");
+          //println!("src_port is {src_port}");
+
+          let dst_port: i32 = row.get(6).expect("Unable to open column 6");
+          //println!("dst_port is {dst_port}");
+
+          let in_pkts: i32 = row.get(10).expect("Unable to open column 10");
+          //println!("in_pkts is {in_pkts}");
+
+          let in_bytes: i32 = row.get(11).expect("Unable to open column 11");
+          //println!("in_bytes is {in_bytes}");
+
+          builder.push_record([
+            sender_ip, 
+            src_addr, 
+            dst_addr, 
+            protocol.to_string(), 
+            src_port.to_string(), 
+            dst_port.to_string(), 
+            in_pkts.to_string(), 
+            in_bytes.to_string()
+            ]);
+        }
+
+
+        let mut table = builder.build();
+        table.with(Style::ascii_rounded());
+        table
+
+}

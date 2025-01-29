@@ -1,8 +1,10 @@
 use std::net::Ipv4Addr;
+use rusqlite::{Connection};
+use std::sync::{Arc, Mutex, MutexGuard};
+
 use crate::templates::*;
 use crate::fields::*;
-
-
+use crate::sql::*;
 
 #[derive(Clone)]
 pub struct NetflowSender {
@@ -37,7 +39,9 @@ impl NetflowSender {
 
         }
     }
-    
+  
+
+
     pub fn parse_packet_to_flow(&mut self) {
         while let Some(pkt) = self.flow_packets.pop() {
                     //println!("parsing packet to flow");
@@ -106,6 +110,7 @@ impl NetflowSender {
                             //Need to handle optional variants
                             in_octets: oct,
                             in_packets: pk,
+                            in_db: false,
                         };
                         self.flow_stats.push(new_flow)
                     }
@@ -116,6 +121,21 @@ impl NetflowSender {
                 //     return;
                 // }
             
+        }
+    }
+
+    pub fn prepare_and_update_flow_in_db(&mut self, db_conn: &mut Arc<Mutex<Connection>>) {
+        let sender_ip: String = String::from(&self.ip_addr.to_string());
+        let mut db_conn_unlocked: MutexGuard<Connection> = db_conn.lock().unwrap();
+        for flow in &mut self.flow_stats {
+            if !flow.in_db {
+                create_flow_in_db(&mut db_conn_unlocked, flow, &sender_ip);
+                flow.in_db = true;
+            }
+            else {
+                update_flow_in_db(&mut db_conn_unlocked, flow, &sender_ip);
+            }
+           
         }
     }
 }
