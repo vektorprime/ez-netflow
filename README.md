@@ -8,5 +8,7 @@ EXAMPLE OUTPUT:
 
 
 utlizes the following crates:
+
 rusqlite - for running the db in memory or saving to file
+
 tabled - for pretty table views
