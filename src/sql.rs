@@ -17,7 +17,7 @@ pub fn setup_db(conn_type: ConnType) -> Connection {
             Connection::open_in_memory().expect("Unable to open SQLITE db connection in memory")
         },
         ConnType::InFile => {
-            Connection::open("./eznf_db.db").expect("Unable to open SQLITE db connection in memory")
+            Connection::open("./eznf_db.sqlite").expect("Unable to open SQLITE db connection in memory")
         }
     };
 
@@ -58,7 +58,7 @@ pub fn setup_db(conn_type: ConnType) -> Connection {
 pub fn update_senders_in_db(db_conn: &mut Arc<Mutex<Connection>>, sender_ip: &str) {
     let db_conn_unlocked: MutexGuard<Connection> = db_conn.lock().unwrap();
     db_conn_unlocked.execute( 
-        "INSERT INTO senders (ip) VALUES (?)",
+        "INSERT OR IGNORE INTO senders (ip) VALUES (?)",
         [sender_ip.to_string()],
         ).expect("Unable to execute SQL in update_senders_in_db");
 }
