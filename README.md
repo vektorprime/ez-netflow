@@ -5,7 +5,7 @@ This is a netflow server (receiver) built in Rust. It automatically displays sta
 - Be lightweight
 - Be easy to use (simple)
 - Startup with no tinkering
-- 
+  
 EXAMPLE OUTPUT:
 ![image](https://github.com/user-attachments/assets/e9ff00b1-2bc7-485d-8fe8-336ec1d39ed8)
 
