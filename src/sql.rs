@@ -46,6 +46,7 @@ pub fn setup_db(conn_type: &ConnType) -> Connection {
         src_mask INTEGER,
         dst_mask INTEGER,
         next_hop TEXT,
+        ICMP TEXT,
          FOREIGN KEY (sender_ip) REFERENCES senders(ip)
         )",
         [],
@@ -111,7 +112,8 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
         "src_port", 
         "dst_port", 
         "in_pkts", 
-        "in_bytes"
+        "in_bytes",
+        "icmp_type"
         ]);
     
     let mut conn: MutexGuard<Connection> = db_conn_cli.lock().unwrap();
@@ -148,24 +150,29 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
           //println!("dst_addr is {dst_addr}");
           let protocol: i32 = row.get(4).expect("Unable to open column 4");
           //println!("protocol is {protocol}");
-          let src_port: i32 = row.get(5).expect("Unable to open column 5");
+          let mut src_port: i32 = row.get(5).expect("Unable to open column 5");
           //println!("src_port is {src_port}");
-          let dst_port: i32 = row.get(6).expect("Unable to open column 6");
+          let mut dst_port: i32 = row.get(6).expect("Unable to open column 6");
           //println!("dst_port is {dst_port}");
           let in_pkts: i32 = row.get(10).expect("Unable to open column 10");
           //println!("in_pkts is {in_pkts}");
           let in_bytes: i32 = row.get(11).expect("Unable to open column 11");
           //println!("in_bytes is {in_bytes}");
 
+          let (icmp_type, src_port2,dst_port2) = handle_icmp_code(protocol, src_port, dst_port);
+       
+
+
           builder.push_record([
             sender_ip, 
             src_addr, 
             dst_addr, 
             protocol.to_string(), 
-            src_port.to_string(), 
-            dst_port.to_string(), 
+            src_port2.to_string(), 
+            dst_port2.to_string(), 
             in_pkts.to_string(), 
-            in_bytes.to_string()
+            in_bytes.to_string(),
+            icmp_type,
             ]);
         }
 
@@ -191,4 +198,25 @@ pub fn get_all_senders_in_db() {
         //       //println!("ip_from_db is {ip_from_db}");
         //     }
         // }
+}
+
+
+pub fn handle_icmp_code(protocol: i32, src_port:i32, dst_port:i32) -> (String, i32, i32) {
+    //returning tuple in case I want to actually return type and code later
+    if protocol == 1 {
+        if src_port == 0 && dst_port == 0 {
+            ("ECHO_REPLY".to_string(), 0, 0)
+        }
+        else if src_port == 2048 || dst_port == 2048 {
+            ("ECHO_REQ".to_string(), 0, 0)
+        }
+        else {
+            ("NOT_SURE".to_string(), src_port, dst_port)
+        }
+    }
+    else {
+    ("NONE".to_string(), src_port, dst_port)
+    }
+
+
 }

@@ -24,11 +24,11 @@ use crate::settings::*;
 
 
 fn main() {
-    let server_settings = ServerSettings {
-        conn_type: ConnType::InFile,
-        flow_limit: FlowsToShow::Limit { flows: (30) },
-        sort_by: SortBy::Bytes
-    };
+
+
+    let server_settings = ServerSettings::new("config.ini");
+
+
     
     //secure the db access for multi-thread use
     let mut db_conn_cli: std::sync::Arc<Mutex<Connection>>  = Arc::new(Mutex::new(setup_db(&server_settings.conn_type)));
