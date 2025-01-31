@@ -4,7 +4,8 @@ This is a project used to learn Rust.
 
 
 EXAMPLE OUTPUT:
-![ez_netflow_program](https://github.com/user-attachments/assets/89996e80-6fb9-4363-a7e9-c799c64b44ec)
+![image](https://github.com/user-attachments/assets/e9ff00b1-2bc7-485d-8fe8-336ec1d39ed8)
+
 
 
 utlizes the following crates:
