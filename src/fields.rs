@@ -6,6 +6,13 @@ pub enum NetflowVersion {
     V9(u16)
 }
 
+#[derive(PartialEq)]
+pub enum IpCast {
+    Unicast,
+    Multicast,
+    Broadcast
+}
+
 pub enum PacketType {
     Template,
     Data

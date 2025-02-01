@@ -6,7 +6,8 @@ use rusqlite::{Connection, params};
 use tabled::{builder::Builder, settings::Style};
 
 use crate::settings::*;
-
+use crate::utils::*;
+use crate::fields::*;
 
 
 pub fn setup_db(conn_type: &ConnType) -> Connection {
@@ -46,7 +47,8 @@ pub fn setup_db(conn_type: &ConnType) -> Connection {
         src_mask INTEGER,
         dst_mask INTEGER,
         next_hop TEXT,
-        ICMP TEXT,
+        icmp TEXT,
+        cast TEXT,
          FOREIGN KEY (sender_ip) REFERENCES senders(ip)
         )",
         [],
@@ -113,7 +115,8 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
         "dst_port", 
         "in_pkts", 
         "in_bytes",
-        "icmp_type"
+        "icmp_type",
+        "cast",
         ]);
     
     let mut conn: MutexGuard<Connection> = db_conn_cli.lock().unwrap();
@@ -161,6 +164,7 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
 
           let (icmp_type, src_port2,dst_port2) = handle_icmp_code(protocol, src_port, dst_port);
        
+          let ip_cast = handle_traffic_cast(&src_addr, &dst_addr);
 
 
           builder.push_record([
@@ -173,6 +177,7 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
             in_pkts.to_string(), 
             in_bytes.to_string(),
             icmp_type,
+            ip_cast,
             ]);
         }
 
@@ -184,21 +189,21 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
 }
 
 
-pub fn get_all_senders_in_db() {
-            // {
-        //     let mut conn: MutexGuard<Connection> = db_conn_cli.lock().unwrap();
-        //     let mut stmt: rusqlite::Statement = conn.prepare("SELECT * FROM senders")
-        //         .expect("Unable to prepare query");
+// pub fn get_all_senders_in_db() {
+//             // {
+//         //     let mut conn: MutexGuard<Connection> = db_conn_cli.lock().unwrap();
+//         //     let mut stmt: rusqlite::Statement = conn.prepare("SELECT * FROM senders")
+//         //         .expect("Unable to prepare query");
 
-        //     let mut rows = stmt.query([])
-        //         .expect("Unable to query rows");
+//         //     let mut rows = stmt.query([])
+//         //         .expect("Unable to query rows");
 
-        //    while let Some(row) = rows.next().expect("no more rows") {
-        //       let ip_from_db: String = row.get(0).expect("Unable to open column 0");
-        //       //println!("ip_from_db is {ip_from_db}");
-        //     }
-        // }
-}
+//         //    while let Some(row) = rows.next().expect("no more rows") {
+//         //       let ip_from_db: String = row.get(0).expect("Unable to open column 0");
+//         //       //println!("ip_from_db is {ip_from_db}");
+//         //     }
+//         // }
+// }
 
 
 pub fn handle_icmp_code(protocol: i32, src_port:i32, dst_port:i32) -> (String, i32, i32) {
@@ -210,12 +215,61 @@ pub fn handle_icmp_code(protocol: i32, src_port:i32, dst_port:i32) -> (String, i
         else if src_port == 2048 || dst_port == 2048 {
             ("ECHO_REQ".to_string(), 0, 0)
         }
+        else if src_port == 768 || dst_port == 768 {
+            ("NET_UNRCH".to_string(), 0, 0)
+        }
+        else if src_port == 769 || dst_port == 769 {
+            ("HOST_UNRCH".to_string(), 0, 0)
+        }
+        else if src_port == 770 || dst_port == 770 {
+            ("PROTO_UNRCH".to_string(), 0, 0)
+        }
+        else if src_port == 771 || dst_port == 771 {
+            ("PORT_UNRCH".to_string(), 0, 0)
+        }
         else {
             ("NOT_SURE".to_string(), src_port, dst_port)
         }
     }
     else {
     ("NONE".to_string(), src_port, dst_port)
+    }
+
+}
+
+
+pub fn handle_traffic_cast(src_addr: &String, dst_addr: &String) -> String {
+    //returning tuple in case I want to actually return type and code later
+
+    let src_ip = convert_string_to_ipv4(src_addr)
+        .expect("Uanble to convert src_ip string to ipv4 in handle_traffic_cast");
+    let dst_ip = convert_string_to_ipv4(dst_addr)
+        .expect("Uanble to convert dst_ip string to ipv4 in handle_traffic_cast");
+
+    let src_ip_cast = get_ip_cast_type(src_ip);
+    let dst_ip_cast = get_ip_cast_type(dst_ip);
+
+    // let src_ip_str = match src_ip_cast {
+    //     IpCast::Unicast => "Unicast".to_string(),
+    //     IpCast::Multicast => "Multicast".to_string(),
+    //     IpCast::Broadcast => "Broadcast".to_string(),
+    // };
+
+    // let dst_ip_str = match dst_ip_cast {
+    //     IpCast::Unicast => "Unicast".to_string(),
+    //     IpCast::Multicast => "Multicast".to_string(),
+    //     IpCast::Broadcast => "Broadcast".to_string(),
+    // };
+
+    if src_ip_cast == IpCast::Multicast || dst_ip_cast == IpCast::Multicast {
+        "Multicast".to_string()
+    }
+    else if src_ip_cast == IpCast::Broadcast || dst_ip_cast == IpCast::Broadcast {
+        "Broadcast".to_string()
+    }
+    else 
+    {
+        "Unicast".to_string()
     }
 
 
