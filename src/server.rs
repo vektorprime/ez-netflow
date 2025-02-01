@@ -656,57 +656,64 @@ mod tests {
 
     use super::*;
     
-    // #[test]
-    // fn test_template_data() {
+    #[test]
+    fn test_server() {
+            let db_conn = Arc::new(Mutex::new(setup_db()));
+            NetflowServer::new("10.0.0.40:2055", db_conn);
 
-    //     let fake_template_data = [ 
-    //         0x00, 0x09, 0x00, 0x01, 0x28, 0x67, 0x12, 0x74, 0x67, 
-    //         0x90, 0x18, 0xee, 0x00, 0x00, 0x53, 0x5a, 0x00, 0x00,
-    //         0x01, 0x00, 0x00, 0x00, 0x00, 0x30, 0x01, 0x02, 0x00,
-    //         0x0a, 0x00, 0x08, 0x00, 0x04, 0x00, 0x0c, 0x00, 0x04,
-    //         0x00, 0x04, 0x00, 0x01, 0x00, 0x07, 0x00, 0x02, 0x00,
-    //         0x0b, 0x00, 0x02, 0x00, 0x06, 0x00, 0x01, 0x00, 0x0a,
-    //         0x00, 0x04, 0x00, 0x0e, 0x00, 0x04, 0x00, 0x01, 0x00,
-    //         0x04, 0x00, 0x02, 0x00, 0x04,
-    //     ];
+    }
+    
+    #[test]
+    fn test_template_data() {
 
-    //         /////////////////////////////////////////////////////////////
-    //         //0-1 version 9 ( 2 bytes)
-    //         //2-3 count 1 (2 bytes)
-    //         //4-7 timestamp  jan 21 2025 16:01:14.00000 CST (4 bytes)
-    //         //8-11 flow seq 21344 (4 byte)
-    //         //12-15 source id 256 (4 bytes)
-    //         //16-17 flowset id 0 (2 bytes)
-    //         //18-19 length 48 (2 bytes)
-    //         //20-21 template id 258 (2 bytes)
-    //         //22-23 field count 10 (2 bytes)
-    //         //24-27 ip_src_addr type 00 08 length 00 04 (4 bytes)
-    //         //28-31 ip dst addr type 00 0c length 00 04 (4 bytes)
-    //         //32-35  protocol 00 04 length 00 01 (4 bytes)
-    //         //36-39 l4 src port 00 07 length 00 02 (4 bytes)
-    //         //40-43 l4 dst port 00 0b length 00 02 (4 bytes)
-    //         //44-47 tcp_flags 00 06 length 00 01 (4 bytes)
-    //         //49-51 input_snmp 00 0a length 00 04 (4 bytes)
-    //         //52-55 output snmp 00 0e length 00 04 (4 bytes)
-    //         //56-59 bytes 00 01 length 00 04 (4 bytes)
-    //         //60-63 pkts 00 02 length 00 04 (bytes)
-    //         /////////////////////////////////////////////////////////////
+        let fake_template_data = [ 
+            0x00, 0x09, 0x00, 0x01, 0x28, 0x67, 0x12, 0x74, 0x67, 
+            0x90, 0x18, 0xee, 0x00, 0x00, 0x53, 0x5a, 0x00, 0x00,
+            0x01, 0x00, 0x00, 0x00, 0x00, 0x30, 0x01, 0x02, 0x00,
+            0x0a, 0x00, 0x08, 0x00, 0x04, 0x00, 0x0c, 0x00, 0x04,
+            0x00, 0x04, 0x00, 0x01, 0x00, 0x07, 0x00, 0x02, 0x00,
+            0x0b, 0x00, 0x02, 0x00, 0x06, 0x00, 0x01, 0x00, 0x0a,
+            0x00, 0x04, 0x00, 0x0e, 0x00, 0x04, 0x00, 0x01, 0x00,
+            0x04, 0x00, 0x02, 0x00, 0x04,
+        ];
+
+            /////////////////////////////////////////////////////////////
+            //0-1 version 9 ( 2 bytes)
+            //2-3 count 1 (2 bytes)
+            //4-7 timestamp  jan 21 2025 16:01:14.00000 CST (4 bytes)
+            //8-11 flow seq 21344 (4 byte)
+            //12-15 source id 256 (4 bytes)
+            //16-17 flowset id 0 (2 bytes)
+            //18-19 length 48 (2 bytes)
+            //20-21 template id 258 (2 bytes)
+            //22-23 field count 10 (2 bytes)
+            //24-27 ip_src_addr type 00 08 length 00 04 (4 bytes)
+            //28-31 ip dst addr type 00 0c length 00 04 (4 bytes)
+            //32-35  protocol 00 04 length 00 01 (4 bytes)
+            //36-39 l4 src port 00 07 length 00 02 (4 bytes)
+            //40-43 l4 dst port 00 0b length 00 02 (4 bytes)
+            //44-47 tcp_flags 00 06 length 00 01 (4 bytes)
+            //49-51 input_snmp 00 0a length 00 04 (4 bytes)
+            //52-55 output snmp 00 0e length 00 04 (4 bytes)
+            //56-59 bytes 00 01 length 00 04 (4 bytes)
+            //60-63 pkts 00 02 length 00 04 (bytes)
+            /////////////////////////////////////////////////////////////
 
 
-    //         //moving from mpsc to sqlite
-    //         //let (tx , rx) = mpsc::channel();
-    //         let db_conn = Arc::new(Mutex::new(setup_db()));
-    //         let mut test_server = NetflowServer::new("10.0.0.40:2055", db_conn);
-    //         let fake_data_len = fake_template_data.len();
-    //         test_server.receive_buffer[..fake_data_len].copy_from_slice(&fake_template_data);
-    //         let returned_template: NetflowTemplate = test_server.parse_flow_template(fake_data_len);
+            //moving from mpsc to sqlite
+            //let (tx , rx) = mpsc::channel();
+            let db_conn = Arc::new(Mutex::new(setup_db()));
+            let mut test_server = NetflowServer::new("10.0.0.40:2055", db_conn);
+            let fake_data_len = fake_template_data.len();
+            test_server.receive_buffer[..fake_data_len].copy_from_slice(&fake_template_data);
+            let returned_template: NetflowTemplate = test_server.parse_flow_template();
 
-    //         let field_count = returned_template.field_count;
-    //         if field_count != Some(10) {
-    //             panic!("Field count isn't right");
-    //         }
+            let field_count = returned_template.field_count;
+            if field_count != Some(10) {
+                panic!("Field count isn't right");
+            }
 
-    // }
+    }
     
 }
 
