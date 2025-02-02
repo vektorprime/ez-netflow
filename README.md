@@ -7,7 +7,8 @@ This is a netflow server (receiver) built in Rust. It automatically displays sta
 - Startup with no tinkering
   
 EXAMPLE OUTPUT:
-![image](https://github.com/user-attachments/assets/e9ff00b1-2bc7-485d-8fe8-336ec1d39ed8)
+![ez_netflow_program](https://github.com/user-attachments/assets/36b340ba-8ace-4d33-a92e-3b889bd7bf34)
+
 
 
 
