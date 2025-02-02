@@ -10,6 +10,8 @@ pub struct ServerSettings {
     pub conn_type: ConnType,
     pub flow_limit: FlowsToShow,
     pub sort_by: SortBy,
+    pub port: u16,
+    pub address: String,
 }
 
 impl ServerSettings {
@@ -48,7 +50,9 @@ pub fn parse_config_string(config_string: String) -> ServerSettings {
     let mut settings = ServerSettings {
         conn_type: ConnType::InFile,
         flow_limit: FlowsToShow::Limit { flows: (30) },
-        sort_by: SortBy::Bytes
+        sort_by: SortBy::Bytes,
+        port: 2055,
+        address: "0.0.0.0".to_string(),
     };
 
     let config_vec: Vec<&str> = config_string.trim().split(",").collect();

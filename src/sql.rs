@@ -242,9 +242,9 @@ pub fn handle_traffic_cast(src_addr: &String, dst_addr: &String) -> String {
     //returning tuple in case I want to actually return type and code later
 
     let src_ip = convert_string_to_ipv4(src_addr)
-        .expect("Uanble to convert src_ip string to ipv4 in handle_traffic_cast");
+        .expect("Unable to convert src_ip string to ipv4 in handle_traffic_cast");
     let dst_ip = convert_string_to_ipv4(dst_addr)
-        .expect("Uanble to convert dst_ip string to ipv4 in handle_traffic_cast");
+        .expect("Unable to convert dst_ip string to ipv4 in handle_traffic_cast");
 
     let src_ip_cast = get_ip_cast_type(src_ip);
     let dst_ip_cast = get_ip_cast_type(dst_ip);
@@ -271,6 +271,5 @@ pub fn handle_traffic_cast(src_addr: &String, dst_addr: &String) -> String {
     {
         "Unicast".to_string()
     }
-
 
 }

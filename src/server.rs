@@ -8,9 +8,11 @@ use rusqlite::{Connection};
 
 use crate::fields::*;
 use crate::senders::*;
+use crate::settings::ServerSettings;
 use crate::templates::*;
 use crate::utils::*;
 use crate::sql::*;
+
 
 pub struct NetflowServer {
     pub initial_template_received: bool,
@@ -27,7 +29,7 @@ pub struct NetflowServer {
 
 
 impl NetflowServer {
-    pub fn new(addr_and_port: &str, db_conn_srv: Arc<Mutex<Connection>>) -> Self {
+    pub fn new(addr_and_port: String, db_conn_srv: Arc<Mutex<Connection>>) -> Self {
         NetflowServer {
             initial_template_received: false,
             socket: UdpSocket::bind(addr_and_port)
@@ -638,31 +640,44 @@ impl NetflowServer {
 #[cfg(test)]
 mod tests {
 
-    pub fn setup_db() -> Connection {
-        //create db
-        let db_conn = Connection::open_in_memory().unwrap();
     
-        //create tables
-        db_conn.execute(" CREATE TABLE IF NOT EXISTS senders (
-            id INTEGER PRIMARY KEY,
-            sender_ip TEXT NOT NULL
-            )",
-            [],
-            ).unwrap();
-    
-        db_conn
-    }
-    
-
+    use crate::settings::*;
+    use crate::fields::*;
+    use crate::senders::*;
+    use crate::templates::*;
+    use crate::utils::*;
+    use crate::sql::*;
     use super::*;
+
     
     #[test]
-    fn test_server() {
-            let db_conn = Arc::new(Mutex::new(setup_db()));
-            NetflowServer::new("10.0.0.40:2055", db_conn);
+    fn test_server_in_file_db() {
+        let server_settings =  ServerSettings {
+            conn_type: ConnType::InFile,
+            flow_limit: FlowsToShow::Limit { flows: (30) },
+            sort_by: SortBy::Bytes,
+            port: 2055,
+            address: "0.0.0.0".to_string(),
+        };
 
+        let db_conn = Arc::new(Mutex::new(setup_db(&server_settings.conn_type)));
+        NetflowServer::new("0.0.0.0:2055".to_string(), db_conn);
     }
     
+        
+    #[test]
+    fn test_server_in_mem_db() {
+        let server_settings =  ServerSettings {
+            conn_type: ConnType::InMemory,
+            flow_limit: FlowsToShow::Limit { flows: (30) },
+            sort_by: SortBy::Bytes,
+            port: 2055,
+        };
+
+        let db_conn = Arc::new(Mutex::new(setup_db(&server_settings.conn_type)));
+        NetflowServer::new("0.0.0.0:2055".to_string(), db_conn);
+    }
+
     #[test]
     fn test_template_data() {
 
@@ -698,12 +713,18 @@ mod tests {
             //56-59 bytes 00 01 length 00 04 (4 bytes)
             //60-63 pkts 00 02 length 00 04 (bytes)
             /////////////////////////////////////////////////////////////
-
+            let server_settings =  ServerSettings {
+                conn_type: ConnType::InFile,
+                flow_limit: FlowsToShow::Limit { flows: (30) },
+                sort_by: SortBy::Bytes,
+                port: 2055,
+                address: "0.0.0.0".to_string(),
+            };
 
             //moving from mpsc to sqlite
             //let (tx , rx) = mpsc::channel();
-            let db_conn = Arc::new(Mutex::new(setup_db()));
-            let mut test_server = NetflowServer::new("10.0.0.40:2055", db_conn);
+            let db_conn = Arc::new(Mutex::new(setup_db(&server_settings.conn_type)));
+            let mut test_server = NetflowServer::new("0.0.0.0:2055".to_string(), db_conn);
             let fake_data_len = fake_template_data.len();
             test_server.receive_buffer[..fake_data_len].copy_from_slice(&fake_template_data);
             let returned_template: NetflowTemplate = test_server.parse_flow_template();
