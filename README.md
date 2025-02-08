@@ -13,19 +13,21 @@ EXAMPLE OUTPUT:
 
 
 ## Config
-The config can be modified through config.ini.
+The config can be modified through config.ini. The file is automatically created with default settings if it doesn't exist.
 
 Currently, these options are available.
 ```
 database_file_or_mem: {file | mem}
 flows_to_display: {int between 1-300)
 sort_flows_by_bytes_or_packets: {bytes | packets}
+show_only_unicast: {true | false},
 ```
 Deleting the config.ini will restore the defaults as 
 ```
 database_file_or_mem: file,
 flows_to_display: 30,
 sort_flows_by_bytes_or_packets: bytes
+show_only_unicast: false,
 ```
 
 ## Database
@@ -52,7 +54,9 @@ flow record NetIPv4
  collect interface output
  collect counter bytes
  collect counter packets
-!Basic Ipv4 flow record
+ !next line is optional and used to look for broadcast traffic that comes in on the interface
+ collect datalink mac destination address input
+!Basic Ipv4 flow record end
 
 
 flow monitor NetMonitor
@@ -61,6 +65,7 @@ flow monitor NetMonitor
  cache timeout active 60
  record NetIPv4
 
+!apply it on an interface, e.g. Gi3
 interface GigabitEthernet3
  ip flow monitor NetMonitor input
  ip flow monitor NetMonitor output
@@ -69,11 +74,11 @@ interface GigabitEthernet3
 
 ## Limitations
 These limitations are being worked on.
-- Only listens on UDP 2055.
+- ~Only listens on UDP 2055.~
 - Only supports flexible netflow.
 - Only supports IPv4.
 - Requires waiting for an initial template (template data timeout in flow exporter config) before processing flows.
-- Flows from different sources are counted as unique.
+- ~Flows from different sources are counted as unique.~
 
 ### Crates
 utlizes the following crates:
