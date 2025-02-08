@@ -4,7 +4,6 @@ This is a netflow server (receiver) built in Rust. It automatically displays sta
 ## Goals
 - Be lightweight
 - Be easy to use (simple)
-- Startup with no tinkering
   
 EXAMPLE OUTPUT:
 ![ez_netflow_program](https://github.com/user-attachments/assets/36b340ba-8ace-4d33-a92e-3b889bd7bf34)
