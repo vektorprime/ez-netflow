@@ -77,6 +77,7 @@ pub struct NetFlow {
     pub in_octets: u32,
     pub in_packets: u32,
     pub in_db: bool,
+    pub traffic_type: TrafficType,
 }
 
 

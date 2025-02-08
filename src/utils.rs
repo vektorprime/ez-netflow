@@ -3,7 +3,7 @@ use std::io::{Error, ErrorKind, Result};
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-use crate::fields::IpCast;
+use crate::fields::TrafficType;
 
 pub fn check_packet_size(byte_count: usize) -> Result<()> {
     //println!("checking packet size");
@@ -33,16 +33,16 @@ pub fn convert_ipv4_to_string(ip: Ipv4Addr) -> String {
 }
 
 
-pub fn get_ip_cast_type(ip: Ipv4Addr) -> IpCast {
+pub fn get_ip_cast_type(ip: Ipv4Addr) -> TrafficType {
 
     if ip.is_broadcast() { 
-        IpCast::Broadcast
+        TrafficType::Broadcast
     }
     else if ip.is_multicast() { 
-        IpCast::Multicast
+        TrafficType::Multicast
     }
     else {
-        IpCast::Unicast
+        TrafficType::Unicast
     }
 
 }

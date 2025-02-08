@@ -184,6 +184,12 @@ impl NetflowServer {
                 //received_template.ipv4_next_hop = Some(Ipv4Field::Enabled(order));
                 received_template.order_vec.push(FlowField::NextHop);
             },
+            80 => {
+                received_template.order_vec.push(FlowField::InDstMac);
+            },
+            81 => {
+                received_template.order_vec.push(FlowField::OutSrcMac);
+            },
             _ => {
                 println!("Unsure of the field id {field_id}");
             },
@@ -235,6 +241,12 @@ impl NetflowServer {
             },
             FlowField::NextHop => {
                 FlowField::NextHop
+            },
+            FlowField::InDstMac => {
+                FlowField::InDstMac
+            },
+            FlowField::OutSrcMac => {
+                FlowField::OutSrcMac
             },
             _ => {
                 println!("Unsure of the field in get_field_type");
@@ -289,6 +301,12 @@ impl NetflowServer {
             },
             FlowField::NextHop => {
                 4
+            },
+            FlowField::InDstMac => {
+                6
+            },
+            FlowField::OutSrcMac => {
+                6
             },
             _ => {
                 println!("Unsure of the field size in get_field_size");
@@ -384,10 +402,24 @@ impl NetflowServer {
             },
             FlowField::NextHop => {
                 let field_array: [u8; 4] = field_slice.try_into().expect("Unable to convert field_slice to array");
-                let field_data_u32: u32 = u32::from_be_bytes(field_array);
-                let field_data_ipv4: Ipv4Addr = Ipv4Addr::from_bits(field_data_u32);
+                let field_data: u32 = u32::from_be_bytes(field_array);
+                let field_data_ipv4: Ipv4Addr = Ipv4Addr::from_bits(field_data);
                 //println!("The field is SrcAddr and the converted payload is {}", field_data_ipv4);
                 new_packet.next_hop = Some(Ipv4Field::Value(field_data_ipv4));
+            },
+            FlowField::InDstMac => {
+                let field_array: [u8; 6] = field_slice.try_into().expect("Unable to convert field_slice to array");
+                let mut field_array_64: [u8; 8] = [0; 8];
+                field_array_64[..6].clone_from_slice(&field_array);
+                let field_data: u64 = u64::from_be_bytes(field_array_64);
+                new_packet.in_dst_mac = Some(U64Field::Value(field_data));
+            },
+            FlowField::OutSrcMac => {
+                let field_array: [u8; 6] = field_slice.try_into().expect("Unable to convert field_slice to array");
+                let mut field_array_64: [u8; 8] = [0; 8];
+                field_array_64[..6].clone_from_slice(&field_array);
+                let field_data: u64 = u64::from_be_bytes(field_array_64);
+                new_packet.out_src_mac = Some(U64Field::Value(field_data));
             },
             _ => {
                 println!("Unsure of the field in get_field_type");

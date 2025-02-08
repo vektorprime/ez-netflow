@@ -85,6 +85,24 @@ impl NetflowSender {
                         }
                     );
 
+                    let cast: TrafficType = match pkt.in_dst_mac {
+                        Some(U64Field::Value(v)) => { 
+                            let field_array: [u8; 8] = v.to_be_bytes();
+                            //let field_array: [u8; 6] = field_array_64[..6];
+                            let pkt_cast = handle_traffic_type_in_flow(s_and_d_ip.0, s_and_d_ip.1);
+                            if pkt_cast == TrafficType::Unicast && field_array[0] == 0xFF && field_array[1] == 0xFF
+                            && field_array[2] == 0xFF && field_array[3] == 0xFF && field_array[4] == 0xFF && field_array[5] == 0xFF {
+                                TrafficType::Broadcast
+                            }
+                            else {
+                                pkt_cast
+                            }
+                        },
+                        _ =>  {
+                            handle_traffic_type_in_flow(s_and_d_ip.0, s_and_d_ip.1)
+                        },
+                    };
+
                     let mut updated_flow = false;
                     //look for existing flow and update
                     for flow in &mut self.flow_stats {
@@ -111,6 +129,7 @@ impl NetflowSender {
                             in_octets: oct,
                             in_packets: pk,
                             in_db: false,
+                            traffic_type: cast,
                         };
                         self.flow_stats.push(new_flow)
                     }
@@ -136,7 +155,6 @@ impl NetflowSender {
             else {
                 update_flow_in_db(&mut db_conn_unlocked, flow, &sender_ip);
             }
-           
         }
     }
 }

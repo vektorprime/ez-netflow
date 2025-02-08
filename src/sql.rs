@@ -73,8 +73,14 @@ pub fn update_senders_in_db(db_conn: &mut Arc<Mutex<Connection>>, sender_ip: &st
 pub fn create_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &String) {
 
     //let traffic_type = handle_traffic_cast(&flow.src_and_dst_ip.0.to_string(), &flow.src_and_dst_ip.1.to_string());
-
-    let traffic_type = handle_traffic_type(&flow.src_and_dst_ip.0, &flow.src_and_dst_ip.1);
+    //let traffic_type = handle_traffic_type(&flow);
+    //moved traffic type processing to the same func that processes the flow
+    
+    let traffic_type = match flow.traffic_type {
+        TrafficType::Broadcast => "Broadcast",
+        TrafficType::Multicast => "Multicast",
+        TrafficType::Unicast => "Unicast",
+    };
 
     db_conn.execute( 
         "INSERT INTO flows 
@@ -235,7 +241,7 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
           //println!("in_pkts is {in_pkts}");
           let in_bytes: i32 = row.get(11).expect("Unable to open column 11");
           //println!("in_bytes is {in_bytes}");
-          let ip_cast: String = row.get(17).expect("Unable to open column 17");
+          let traffic_cast: String = row.get(17).expect("Unable to open column 17");
 
           let (icmp_type, src_port2,dst_port2) = handle_icmp_code(protocol, src_port, dst_port);
        
@@ -253,7 +259,7 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
                 in_pkts.to_string(), 
                 in_bytes.to_string(),
                 icmp_type,
-                ip_cast,
+                traffic_cast,
                 ]);
 
         }
@@ -314,35 +320,26 @@ pub fn handle_icmp_code(protocol: i32, src_port:i32, dst_port:i32) -> (String, i
 
 }
 
-pub fn handle_traffic_type(src_ip: &Ipv4Addr, dst_ip: &Ipv4Addr) -> String {
+pub fn handle_traffic_type(flow: &NetFlow) -> String {
     //returning tuple in case I want to actually return type and code later
 
-    // let src_ip = convert_string_to_ipv4(src_addr)
-    //     .expect("Unable to convert src_ip string to ipv4 in handle_traffic_cast");
-    // let dst_ip = convert_string_to_ipv4(dst_addr)
-    //     .expect("Unable to convert dst_ip string to ipv4 in handle_traffic_cast");
+    //This only partially works because we don't know the mask for some broadcast traffic 
+    //e.g. 10.0.0.255 could be valid unicast in a /16.
 
-    let src_ip_cast = get_ip_cast_type(*src_ip);
-    let dst_ip_cast = get_ip_cast_type(*dst_ip);
+    let src_ip_cast = get_ip_cast_type(flow.src_and_dst_ip.0);
+    let dst_ip_cast = get_ip_cast_type(flow.src_and_dst_ip.1);
 
-    // let src_ip_str = match src_ip_cast {
-    //     IpCast::Unicast => "Unicast".to_string(),
-    //     IpCast::Multicast => "Multicast".to_string(),
-    //     IpCast::Broadcast => "Broadcast".to_string(),
-    // };
+    //let dst_mac = flow.
 
-    // let dst_ip_str = match dst_ip_cast {
-    //     IpCast::Unicast => "Unicast".to_string(),
-    //     IpCast::Multicast => "Multicast".to_string(),
-    //     IpCast::Broadcast => "Broadcast".to_string(),
-    // };
-
-    if src_ip_cast == IpCast::Multicast || dst_ip_cast == IpCast::Multicast {
+    if src_ip_cast == TrafficType::Multicast || dst_ip_cast == TrafficType::Multicast {
         "Multicast".to_string()
     }
-    else if src_ip_cast == IpCast::Broadcast || dst_ip_cast == IpCast::Broadcast {
+    else if src_ip_cast == TrafficType::Broadcast || dst_ip_cast == TrafficType::Broadcast {
         "Broadcast".to_string()
     }
+    // else if src_ip_cast == TrafficType::Broadcast || dst_ip_cast == TrafficType::Broadcast {
+    //     "Broadcast".to_string()
+    // }
     else 
     {
         "Unicast".to_string()
@@ -350,38 +347,21 @@ pub fn handle_traffic_type(src_ip: &Ipv4Addr, dst_ip: &Ipv4Addr) -> String {
 
 }
 
-pub fn handle_traffic_cast(src_addr: &String, dst_addr: &String) -> String {
-    //returning tuple in case I want to actually return type and code later
+pub fn handle_traffic_type_in_flow(src_addr: Ipv4Addr, dst_addr: Ipv4Addr) -> TrafficType {
 
-    let src_ip = convert_string_to_ipv4(src_addr)
-        .expect("Unable to convert src_ip string to ipv4 in handle_traffic_cast");
-    let dst_ip = convert_string_to_ipv4(dst_addr)
-        .expect("Unable to convert dst_ip string to ipv4 in handle_traffic_cast");
+    let src_ip_cast = get_ip_cast_type(src_addr);
+    let dst_ip_cast = get_ip_cast_type(dst_addr);
 
-    let src_ip_cast = get_ip_cast_type(src_ip);
-    let dst_ip_cast = get_ip_cast_type(dst_ip);
 
-    // let src_ip_str = match src_ip_cast {
-    //     IpCast::Unicast => "Unicast".to_string(),
-    //     IpCast::Multicast => "Multicast".to_string(),
-    //     IpCast::Broadcast => "Broadcast".to_string(),
-    // };
-
-    // let dst_ip_str = match dst_ip_cast {
-    //     IpCast::Unicast => "Unicast".to_string(),
-    //     IpCast::Multicast => "Multicast".to_string(),
-    //     IpCast::Broadcast => "Broadcast".to_string(),
-    // };
-
-    if src_ip_cast == IpCast::Multicast || dst_ip_cast == IpCast::Multicast {
-        "Multicast".to_string()
+    if src_ip_cast == TrafficType::Multicast || dst_ip_cast == TrafficType::Multicast {
+        TrafficType::Multicast
     }
-    else if src_ip_cast == IpCast::Broadcast || dst_ip_cast == IpCast::Broadcast {
-        "Broadcast".to_string()
+    else if src_ip_cast == TrafficType::Broadcast || dst_ip_cast == TrafficType::Broadcast {
+        TrafficType::Broadcast
     }
     else 
     {
-        "Unicast".to_string()
+        TrafficType::Unicast
     }
 
 }

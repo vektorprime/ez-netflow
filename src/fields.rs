@@ -6,8 +6,8 @@ pub enum NetflowVersion {
     V9(u16)
 }
 
-#[derive(PartialEq)]
-pub enum IpCast {
+#[derive(PartialEq, Clone)]
+pub enum TrafficType {
     Unicast,
     Multicast,
     Broadcast
@@ -103,3 +103,8 @@ pub enum FlowField {
    
 
 }
+
+
+
+//best resource for cisco flexible netflow fields
+//https://www.cisco.com/en/US/technologies/tk648/tk362/technologies_white_paper09186a00800a3db9.html
