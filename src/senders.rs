@@ -128,6 +128,7 @@ impl NetflowSender {
         let sender_ip: String = String::from(&self.ip_addr.to_string());
         let mut db_conn_unlocked: MutexGuard<Connection> = db_conn.lock().unwrap();
         for flow in &mut self.flow_stats {
+            flow.in_db = check_if_flow_exists_in_db(&mut db_conn_unlocked, flow);
             if !flow.in_db {
                 create_flow_in_db(&mut db_conn_unlocked, flow, &sender_ip);
                 flow.in_db = true;

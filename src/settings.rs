@@ -12,12 +12,13 @@ pub struct ServerSettings {
     pub sort_by: SortBy,
     pub port: u16,
     pub address: String,
+    pub unicast_only: bool,
 }
 
 impl ServerSettings {
     pub fn new(file: &str) -> Self {
         let default_config: &[u8] = 
-        "database_file_or_mem: file,\nflows_to_display: 30,\nsort_flows_by_bytes_or_packets: bytes".as_bytes();
+        "database_file_or_mem: file,\nflows_to_display: 30,\nsort_flows_by_bytes_or_packets: bytes,\nshow_only_unicast: false,".as_bytes();
 
         let config_result = fs::read_to_string(file);
             //.expect("Unable to read config.ini");
@@ -53,8 +54,10 @@ pub fn parse_config_string(config_string: String) -> ServerSettings {
         sort_by: SortBy::Bytes,
         port: 2055,
         address: "0.0.0.0".to_string(),
+        unicast_only: false,
     };
 
+    
     let config_vec: Vec<&str> = config_string.trim().split(",").collect();
     for c in config_vec {
         if c.contains("database_file_or_mem") {
@@ -87,6 +90,18 @@ pub fn parse_config_string(config_string: String) -> ServerSettings {
                 }
                 else {
                     settings.sort_by = SortBy::Pkts;
+                }
+            }
+        }
+        else if c.contains("show_only_unicast") {
+            let c2: Vec<&str> = c.split(":").collect();
+            //println!("c2 is {}, AND {}", c2[0], c2[1]);
+            if c2.len() == 2 {
+                if c2[1].contains("true") {
+                    settings.unicast_only = true;
+                }
+                else {
+                    settings.unicast_only = false;
                 }
             }
         }

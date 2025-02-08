@@ -1,11 +1,14 @@
 
+use std::io::ErrorKind;
 use std::sync::{Arc, Mutex, MutexGuard};
-use crate::{senders::*, templates::NetFlow};
+use std::net::Ipv4Addr;
 
+use rusqlite::ffi::Error;
 use rusqlite::OptionalExtension;
-use rusqlite::{Connection, params};
+use rusqlite::{ErrorCode, Connection, params};
 use tabled::{builder::Builder, settings::Style};
 
+use crate::{senders::*, templates::NetFlow};
 use crate::settings::*;
 use crate::utils::*;
 use crate::fields::*;
@@ -49,7 +52,7 @@ pub fn setup_db(conn_type: &ConnType) -> Connection {
         dst_mask INTEGER,
         next_hop TEXT,
         icmp TEXT,
-        cast TEXT,
+        traffic_type TEXT,
          FOREIGN KEY (sender_ip) REFERENCES senders(ip)
         )",
         [],
@@ -68,10 +71,15 @@ pub fn update_senders_in_db(db_conn: &mut Arc<Mutex<Connection>>, sender_ip: &st
 
 
 pub fn create_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &String) {
+
+    //let traffic_type = handle_traffic_cast(&flow.src_and_dst_ip.0.to_string(), &flow.src_and_dst_ip.1.to_string());
+
+    let traffic_type = handle_traffic_type(&flow.src_and_dst_ip.0, &flow.src_and_dst_ip.1);
+
     db_conn.execute( 
         "INSERT INTO flows 
-            (sender_ip, src_addr, dst_addr, src_port, dst_port, protocol, in_octets, in_pkts) 
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            (sender_ip, src_addr, dst_addr, src_port, dst_port, protocol, in_octets, in_pkts, traffic_type) 
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         (sender_ip.to_string(), 
             flow.src_and_dst_ip.0.to_string(), 
             flow.src_and_dst_ip.1.to_string(),
@@ -79,7 +87,8 @@ pub fn create_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &S
             flow.src_and_dst_port.1, 
             flow.protocol, 
             flow.in_octets, 
-            flow.in_packets),
+            flow.in_packets,
+            traffic_type),
         ).expect("Unable to execute SQL in create_flow_in_db");
 }
 
@@ -87,44 +96,56 @@ pub fn create_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &S
 //I first need to make sure a flow is not created twice, no matter the sender
 pub fn update_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &String) {
     db_conn.execute( 
-        "UPDATE flows
-            SET in_octets = ?7, in_pkts = ?8
-            AND src_addr = ?2
-            AND dst_addr = ?3
-            AND src_port = ?4
-            AND dst_port = ?5
-            AND protocol = ?6",
-        params![sender_ip.to_string(), 
+        "UPDATE flows SET 
+            in_octets = ?1, 
+            in_pkts = ?2
+            WHERE src_addr = ?3
+            AND dst_addr = ?4
+            AND src_port = ?5
+            AND dst_port = ?6
+            AND protocol = ?7",
+        params![
+            flow.in_octets, 
+            flow.in_packets,
             flow.src_and_dst_ip.0.to_string(), 
             flow.src_and_dst_ip.1.to_string(),
             flow.src_and_dst_port.0, 
             flow.src_and_dst_port.1, 
             flow.protocol, 
-            flow.in_octets, 
-            flow.in_packets]
+            ]
         ).expect("Unable to execute SQL in update_flow_in_db");
 }
 
-pub fn check_if_flow_exists_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &String) -> bool {
+pub fn check_if_flow_exists_in_db(db_conn: &mut Connection, flow: &NetFlow) -> bool {
 
     let row_result = db_conn.query_row(
             "SELECT * FROM flows WHERE 
-            src_addr =?1 AND 
-            dst_addr =?2 AND 
-            src_port =?3 AND 
-            dst_port =?4 AND 
-            protocol =?5",
-            [&flow.src_and_dst_ip.0.to_string(), 
+            src_addr = ?1 AND 
+            dst_addr = ?2 AND 
+            src_port = ?3 AND 
+            dst_port = ?4 AND 
+            protocol = ?5",
+            params![&flow.src_and_dst_ip.0.to_string(), 
             &flow.src_and_dst_ip.1.to_string(), 
-            &flow.src_and_dst_port.0.to_string(), 
-            &flow.src_and_dst_port.1.to_string(),
-            &flow.protocol.to_string()],
-            |row| row.get::<_, String>(1),
-    ).optional();
+            &flow.src_and_dst_port.0, 
+            &flow.src_and_dst_port.1,
+            &flow.protocol],
+            |row| row.get::<_, i32>(0),
+    );
 
     match row_result {
-        Ok(Some(s)) =>true,
-         _ => false
+        Ok(s) => {
+            //println!("existing flow found, id is {s}");
+            true 
+        },
+         Err(rusqlite::Error::QueryReturnedNoRows) => {
+            //println!("existing flow NOT found because query returned no rows");
+            false
+         },
+         Err(e) => {
+            //println!("Error in checking for existing fow in SQL, setting flow as existing,  error is {e}");
+            false
+         }
     }
     
 }
@@ -143,7 +164,7 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
         "in_pkts", 
         "in_bytes",
         "icmp_type",
-        "cast",
+        "traffic_type",
         ]);
     
     let mut conn: MutexGuard<Connection> = db_conn_cli.lock().unwrap();
@@ -153,22 +174,48 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
         FlowsToShow::NoLimit => 1000,
     };
 
-    let mut stmt: rusqlite::Statement = match server_settings.sort_by {
+    let select_statement = "SELECT * FROM flows ".to_string();
+    let filter_statement = match server_settings.unicast_only {
+        true => {
+            "WHERE traffic_type = \'Unicast\'"
+        },
+        false => {""},
+    };
+    
+    let order_statement = match server_settings.sort_by {
         SortBy::Bytes => { 
-            conn.prepare("SELECT * FROM flows ORDER BY in_octets DESC LIMIT ?")
-                .expect("Unable to prepare query")
+            " ORDER BY in_octets DESC LIMIT ?"
         },
         SortBy::Pkts => {
-            conn.prepare("SELECT * FROM flows ORDER BY in_pkts DESC LIMIT ?")
-                .expect("Unable to prepare query")
+            "SELECT * FROM flows ORDER BY in_pkts DESC LIMIT ?"
         },
         SortBy::None => {
-            conn.prepare("SELECT * FROM flows LIMIT ?")
-                .expect("Unable to prepare query")
-        }
+            "SELECT * FROM flows LIMIT ?"
+        },
     } ;
 
-    let mut rows = stmt.query([flow_limit])
+    let joined_statement = select_statement + filter_statement + order_statement;
+
+    let mut stmt: rusqlite::Statement = conn.prepare(&joined_statement)
+        .expect("Unable to prepare query");
+
+    //switched to making parts of the query in match statements so it's more concise
+    // let mut stmt: rusqlite::Statement = match server_settings.sort_by {
+    //     SortBy::Bytes => { 
+    //         conn.prepare(joined_statement + " ORDER BY in_octets DESC LIMIT ?2")
+    //             .expect("Unable to prepare query")
+    //     },
+    //     SortBy::Pkts => {
+    //         conn.prepare("SELECT * FROM flows ORDER BY in_pkts DESC LIMIT ?")
+    //             .expect("Unable to prepare query")
+    //     },
+    //     SortBy::None => {
+    //         conn.prepare("SELECT * FROM flows LIMIT ?")
+    //             .expect("Unable to prepare query")
+    //     }
+    // } ;
+
+    let mut rows = stmt.query(params![flow_limit])
         .expect("Unable to query rows");
 
        while let Some(row) = rows.next().expect("no more rows") {
@@ -180,32 +227,35 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
           //println!("dst_addr is {dst_addr}");
           let protocol: i32 = row.get(4).expect("Unable to open column 4");
           //println!("protocol is {protocol}");
-          let mut src_port: i32 = row.get(5).expect("Unable to open column 5");
+          let src_port: i32 = row.get(5).expect("Unable to open column 5");
           //println!("src_port is {src_port}");
-          let mut dst_port: i32 = row.get(6).expect("Unable to open column 6");
+          let dst_port: i32 = row.get(6).expect("Unable to open column 6");
           //println!("dst_port is {dst_port}");
           let in_pkts: i32 = row.get(10).expect("Unable to open column 10");
           //println!("in_pkts is {in_pkts}");
           let in_bytes: i32 = row.get(11).expect("Unable to open column 11");
           //println!("in_bytes is {in_bytes}");
+          let ip_cast: String = row.get(17).expect("Unable to open column 17");
 
           let (icmp_type, src_port2,dst_port2) = handle_icmp_code(protocol, src_port, dst_port);
        
-          let ip_cast = handle_traffic_cast(&src_addr, &dst_addr);
+          //let ip_cast = handle_traffic_cast(&src_addr, &dst_addr);
 
 
-          builder.push_record([
-            sender_ip, 
-            src_addr, 
-            dst_addr, 
-            protocol.to_string(), 
-            src_port2.to_string(), 
-            dst_port2.to_string(), 
-            in_pkts.to_string(), 
-            in_bytes.to_string(),
-            icmp_type,
-            ip_cast,
-            ]);
+
+            builder.push_record([
+                sender_ip, 
+                src_addr, 
+                dst_addr, 
+                protocol.to_string(), 
+                src_port2.to_string(), 
+                dst_port2.to_string(), 
+                in_pkts.to_string(), 
+                in_bytes.to_string(),
+                icmp_type,
+                ip_cast,
+                ]);
+
         }
 
 
@@ -264,6 +314,41 @@ pub fn handle_icmp_code(protocol: i32, src_port:i32, dst_port:i32) -> (String, i
 
 }
 
+pub fn handle_traffic_type(src_ip: &Ipv4Addr, dst_ip: &Ipv4Addr) -> String {
+    //returning tuple in case I want to actually return type and code later
+
+    // let src_ip = convert_string_to_ipv4(src_addr)
+    //     .expect("Unable to convert src_ip string to ipv4 in handle_traffic_cast");
+    // let dst_ip = convert_string_to_ipv4(dst_addr)
+    //     .expect("Unable to convert dst_ip string to ipv4 in handle_traffic_cast");
+
+    let src_ip_cast = get_ip_cast_type(*src_ip);
+    let dst_ip_cast = get_ip_cast_type(*dst_ip);
+
+    // let src_ip_str = match src_ip_cast {
+    //     IpCast::Unicast => "Unicast".to_string(),
+    //     IpCast::Multicast => "Multicast".to_string(),
+    //     IpCast::Broadcast => "Broadcast".to_string(),
+    // };
+
+    // let dst_ip_str = match dst_ip_cast {
+    //     IpCast::Unicast => "Unicast".to_string(),
+    //     IpCast::Multicast => "Multicast".to_string(),
+    //     IpCast::Broadcast => "Broadcast".to_string(),
+    // };
+
+    if src_ip_cast == IpCast::Multicast || dst_ip_cast == IpCast::Multicast {
+        "Multicast".to_string()
+    }
+    else if src_ip_cast == IpCast::Broadcast || dst_ip_cast == IpCast::Broadcast {
+        "Broadcast".to_string()
+    }
+    else 
+    {
+        "Unicast".to_string()
+    }
+
+}
 
 pub fn handle_traffic_cast(src_addr: &String, dst_addr: &String) -> String {
     //returning tuple in case I want to actually return type and code later
