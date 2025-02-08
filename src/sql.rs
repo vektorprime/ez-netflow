@@ -2,6 +2,7 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 use crate::{senders::*, templates::NetFlow};
 
+use rusqlite::OptionalExtension;
 use rusqlite::{Connection, params};
 use tabled::{builder::Builder, settings::Style};
 
@@ -82,11 +83,12 @@ pub fn create_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &S
         ).expect("Unable to execute SQL in create_flow_in_db");
 }
 
+//I can't remove the "WHERE sender_ip = ?1" because it will update all of the flows
+//I first need to make sure a flow is not created twice, no matter the sender
 pub fn update_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &String) {
     db_conn.execute( 
         "UPDATE flows
             SET in_octets = ?7, in_pkts = ?8
-            WHERE sender_ip = ?1
             AND src_addr = ?2
             AND dst_addr = ?3
             AND src_port = ?4
@@ -102,6 +104,31 @@ pub fn update_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &S
             flow.in_packets]
         ).expect("Unable to execute SQL in update_flow_in_db");
 }
+
+pub fn check_if_flow_exists_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &String) -> bool {
+
+    let row_result = db_conn.query_row(
+            "SELECT * FROM flows WHERE 
+            src_addr =?1 AND 
+            dst_addr =?2 AND 
+            src_port =?3 AND 
+            dst_port =?4 AND 
+            protocol =?5",
+            [&flow.src_and_dst_ip.0.to_string(), 
+            &flow.src_and_dst_ip.1.to_string(), 
+            &flow.src_and_dst_port.0.to_string(), 
+            &flow.src_and_dst_port.1.to_string(),
+            &flow.protocol.to_string()],
+            |row| row.get::<_, String>(1),
+    ).optional();
+
+    match row_result {
+        Ok(Some(s)) =>true,
+         _ => false
+    }
+    
+}
+
 
 pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, server_settings: &ServerSettings) -> tabled::Table {
 
