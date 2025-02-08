@@ -16,16 +16,16 @@ The config can be modified through config.ini. The file is automatically created
 
 Currently, these options are available.
 ```
-database_file_or_mem: {file | mem}
-flows_to_display: {int between 1-300)
-sort_flows_by_bytes_or_packets: {bytes | packets}
+database_file_or_mem: {file | mem},
+flows_to_display: {int between 1-300),
+sort_flows_by_bytes_or_packets: {bytes | packets},
 show_only_unicast: {true | false},
 ```
 Deleting the config.ini will restore the defaults as 
 ```
 database_file_or_mem: file,
 flows_to_display: 30,
-sort_flows_by_bytes_or_packets: bytes
+sort_flows_by_bytes_or_packets: bytes,
 show_only_unicast: false,
 ```
 
@@ -53,9 +53,8 @@ flow record NetIPv4
  collect interface output
  collect counter bytes
  collect counter packets
- !next line is optional and used to look for broadcast traffic that comes in on the interface
  collect datalink mac destination address input
-!Basic Ipv4 flow record end
+!last line is optional and used to look for broadcast traffic that comes in on the interface
 
 
 flow monitor NetMonitor
