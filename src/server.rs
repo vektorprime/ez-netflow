@@ -191,7 +191,7 @@ impl NetflowServer {
                 received_template.order_vec.push(FlowField::OutSrcMac);
             },
             _ => {
-                println!("Unsure of the field id {field_id}");
+                //println!("Unsure of the field id {field_id}");
             },
         }
     }
@@ -249,7 +249,7 @@ impl NetflowServer {
                 FlowField::OutSrcMac
             },
             _ => {
-                println!("Unsure of the field in get_field_type");
+                //println!("Unsure of the field in get_field_type");
                 FlowField::None
             },
         }
@@ -309,7 +309,7 @@ impl NetflowServer {
                 6
             },
             _ => {
-                println!("Unsure of the field size in get_field_size");
+                //println!("Unsure of the field size in get_field_size");
                 0
             },
         }
@@ -422,7 +422,7 @@ impl NetflowServer {
                 new_packet.out_src_mac = Some(U64Field::Value(field_data));
             },
             _ => {
-                println!("Unsure of the field in get_field_type");
+                //println!("Unsure of the field in get_field_type");
             },
         }
     }
