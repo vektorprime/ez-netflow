@@ -20,7 +20,8 @@ EXAMPLE OUTPUT:
 5. Configure it on your device
    - on a Cisco router that means applying the "flow monitor" to one or multiple interfaces
 6. Wait for netflow data to populate the table
-   -The screen will auto-update every 5 seconds
+   - The screen will auto-update every 5 seconds
+   - Usually 60 seconds is enough time to get output
 
 
 ## Config
