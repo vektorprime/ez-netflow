@@ -13,12 +13,13 @@ EXAMPLE OUTPUT:
 ## How to use
 1. Download the release
 2. Run the .exe
-2a. A config file and file-based DB are automatically created
-2b. It will listen on UDP 2055
-3. Grab the config template from "Cisco Router Example Config", which is below and customize it for your device
-5. Configure your network device to send netflow v9 (flexible netflow) to the IP of the machine running EZ Netflow
+   - A config file and file-based DB are automatically created
+   - It will listen on UDP 2055
+3. Grab the config template from the "Cisco Router Example Config" section
+4. Customize it for your device (change IP and interfaces)
+5. Configure it on your device, on a Cisco router that means applying the "flow monitor" to one or multiple interfaces
 6. Wait for netflow data to populate the table
-6a. The screen will auto-update every 5 seconds
+   -The screen will auto-update every 5 seconds
 
 
 ## Config
