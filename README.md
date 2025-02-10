@@ -17,7 +17,8 @@ EXAMPLE OUTPUT:
    - It will listen on UDP 2055
 3. Grab the config template from the "Cisco Router Example Config" section
 4. Customize it for your device (change IP and interfaces)
-5. Configure it on your device, on a Cisco router that means applying the "flow monitor" to one or multiple interfaces
+5. Configure it on your device
+   - on a Cisco router that means applying the "flow monitor" to one or multiple interfaces
 6. Wait for netflow data to populate the table
    -The screen will auto-update every 5 seconds
 
