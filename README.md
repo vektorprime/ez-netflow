@@ -6,7 +6,8 @@ This is a netflow server (receiver) built in Rust. It automatically displays sta
 - Be easy to use (simple)
   
 EXAMPLE OUTPUT:
-![ez_netflow_program](https://github.com/user-attachments/assets/36b340ba-8ace-4d33-a92e-3b889bd7bf34)
+![image](https://github.com/user-attachments/assets/710f831e-ebd5-40a0-9fc7-cecce6049ff7)
+
 
 
 
@@ -76,9 +77,19 @@ These limitations are being worked on.
 - Only supports flexible netflow.
 - Only supports IPv4.
 - Requires waiting for an initial template (template data timeout in flow exporter config) before processing flows.
+
+
+
+
 - ~Flows from different sources are counted as unique.~
 
 ### Crates
 utlizes the following crates:
 - rusqlite - for running the db in memory or saving to file
 - tabled - for pretty table views
+
+
+## More Screenshots
+Here's the output of setting "show_only_unicast: true"
+![image](https://github.com/user-attachments/assets/3c87d5b7-de2b-476f-8c4f-ff5ba02c8c1b)
+
