@@ -4,12 +4,21 @@ This is a netflow server (receiver) built in Rust. It automatically displays sta
 ## Goals
 - Be lightweight
 - Be easy to use (simple)
+- Portable (no installation)
   
 EXAMPLE OUTPUT:
 ![image](https://github.com/user-attachments/assets/710f831e-ebd5-40a0-9fc7-cecce6049ff7)
 
 
-
+## How to use
+1. Download the release
+2. Run the .exe
+2a. A config file and file-based DB are automatically created
+2b. It will listen on UDP 2055
+3. Grab the config template from "Cisco Router Example Config", which is below and customize it for your device
+5. Configure your network device to send netflow v9 (flexible netflow) to the IP of the machine running EZ Netflow
+6. Wait for netflow data to populate the table
+6a. The screen will auto-update every 5 seconds
 
 
 ## Config
