@@ -7,6 +7,8 @@ use crate::fields::*;
 use crate::sql::*;
 use crate::utils::*;
 
+
+
 #[derive(Clone)]
 pub struct NetflowSender {
     pub ip_addr: Ipv4Addr,
