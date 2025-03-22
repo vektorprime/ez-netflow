@@ -1,11 +1,11 @@
 use std::net::Ipv4Addr;
-use rusqlite::{Connection};
+use rusqlite::Connection;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::templates::*;
 use crate::fields::*;
 use crate::sql::*;
-
+use crate::utils::*;
 
 #[derive(Clone)]
 pub struct NetflowSender {
