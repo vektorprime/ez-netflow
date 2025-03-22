@@ -2,7 +2,8 @@
 name = "ez-netflow"
 version = "0.1.0"
 edition = "2021"
-
+readme = "README.md"
+repository = "https://github.com/vektorprime/ez_netflow"
 [dependencies]
 rusqlite = { version = "0.33.0", features = ["bundled"] }
 tabled = "0.17.0"
