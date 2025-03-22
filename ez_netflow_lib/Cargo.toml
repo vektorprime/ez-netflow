@@ -1,8 +1,14 @@
 [package]
-name = "ez_netflow_lib"
+name = "ez-netflow-lib"
 version = "0.1.0"
 edition = "2021"
-
+readme = "README.md"
+license = "MIT"
+description = "EZ-Netflow is an all-in-one netflow server and library that's really easy to use. This is the lib crate, which contains the core server and database code. Use this crate directly if you want to incorporate EZ-Netflow into your project."
+keywords = ["netflow", "ipfix", "sflow"]
+categories = ["network-programming", "command-line-utilities"]
+maintenance = { status = "actively-developed" }
+repository = "https://github.com/vektorprime/ez-netflow"
 
 
 [dependencies]
