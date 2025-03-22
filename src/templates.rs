@@ -69,7 +69,7 @@ pub struct NetflowTemplate {
 
 
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct NetFlow {
     pub src_and_dst_ip: (Ipv4Addr, Ipv4Addr),
     pub src_and_dst_port: (u16, u16),
@@ -80,6 +80,43 @@ pub struct NetFlow {
     pub traffic_type: TrafficType,
 }
 
+#[derive(Clone, Serialize)]
+pub struct NetflowBytesJson {
+    pub flow_src_ip: String,
+    pub flow_bytes: i32,
+}
+
+#[derive(Clone, Serialize)]
+pub struct NetflowIpsJson {
+    pub flow_ip: String,
+}
+
+#[derive(Clone, Serialize)]
+pub struct NetflowPacketsJson {
+    pub flow_src_ip: String,
+    pub flow_packets: i32,
+}
+
+#[derive(Clone, Serialize)]
+pub struct NetflowPortsAndProtocolsJson {
+    pub flow_src_port: i32,
+    pub flow_dst_port: i32,
+    pub flow_protocol: i32,
+    pub flow_bytes: i32,
+}
+
+#[derive(Clone, Serialize)]
+pub struct NetFlowJson {
+    pub src_ip: Ipv4Addr,
+    pub dst_ip: Ipv4Addr,
+    pub src_port: u16,
+    pub dst_port: u16,
+    pub protocol: u8,
+    pub in_octets: u32,
+    pub in_packets: u32,
+    pub traffic_type: TrafficType,
+    pub icmp: String,
+}
 
 #[derive(Clone)]
 pub struct NetflowPacket {
