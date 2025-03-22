@@ -1,4 +1,4 @@
-# EZNetflow
+# EZ-Netflow
 This is a netflow server (receiver) built in Rust. It automatically displays stats about the flows it receives and stores the information.  Just run ez_netflow.exe to start listening and displaying data.
 
 ## Goals
