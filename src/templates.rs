@@ -1,5 +1,7 @@
 use std::net::Ipv4Addr;
 
+use serde::Serialize;
+
 use crate::fields::*;
 
 
