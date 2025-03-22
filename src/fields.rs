@@ -1,4 +1,5 @@
 use std::net::Ipv4Addr;
+use serde::Serialize;
 
 #[derive(Copy, Clone)]
 pub enum NetflowVersion {
@@ -6,7 +7,7 @@ pub enum NetflowVersion {
     V9(u16)
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Serialize)]
 pub enum TrafficType {
     Unicast,
     Multicast,
@@ -49,7 +50,7 @@ pub enum U32Field {
     Value(u32),
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize)]
 pub enum Ipv4Field {
     Disabled,
     Enabled,

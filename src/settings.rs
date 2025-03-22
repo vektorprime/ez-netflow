@@ -4,7 +4,6 @@ use std::fs;
 use std::io::ErrorKind;
 use std::io::Write;
 
-
 #[derive(Debug)]
 pub struct ServerSettings {
     pub conn_type: ConnType,

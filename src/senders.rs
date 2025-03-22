@@ -6,6 +6,7 @@ use crate::templates::*;
 use crate::fields::*;
 use crate::sql::*;
 
+
 #[derive(Clone)]
 pub struct NetflowSender {
     pub ip_addr: Ipv4Addr,
@@ -106,9 +107,7 @@ impl NetflowSender {
                     let mut updated_flow = false;
                     //look for existing flow and update
                     for flow in &mut self.flow_stats {
-                        if flow.src_and_dst_ip == s_and_d_ip && 
-                            flow.src_and_dst_port == s_and_d_port &&
-                            flow.protocol == proto {
+                        if is_flow_match(flow.src_and_dst_ip, s_and_d_ip, flow.src_and_dst_port, s_and_d_port) {
                                 //println!("updating existing flow");
                                 flow.in_octets += oct;
                                 flow.in_packets += pk;
