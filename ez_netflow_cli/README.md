@@ -85,20 +85,9 @@ interface GigabitEthernet3
 
 ## Limitations
 These limitations are being worked on.
-- ~Only listens on UDP 2055.~
 - Only supports flexible netflow.
 - Only supports IPv4.
 - Requires waiting for an initial template (template data timeout in flow exporter config) before processing flows.
-
-
-
-
-- ~Flows from different sources are counted as unique.~
-
-### Crates
-utlizes the following crates:
-- rusqlite - for running the db in memory or saving to file
-- tabled - for pretty table views
 
 
 ## More Screenshots
