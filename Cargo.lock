@@ -33,7 +33,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ez_netflow"
+name = "ez-netflow"
 version = "0.1.0"
 dependencies = [
  "log",
