@@ -8,8 +8,8 @@ description = "EZ-Netflow is a netflow server that's easy to use. You can use EZ
 keywords = ["netflow", "ipfix", "sflow"]
 categories = ["network-programming", "command-line-utilities"]
 maintenance = { status = "actively-developed" }
-
 repository = "https://github.com/vektorprime/ez_netflow"
+
 [dependencies]
 rusqlite = { version = "0.33.0", features = ["bundled"] }
 tabled = "0.17.0"
