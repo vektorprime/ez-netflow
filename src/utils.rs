@@ -46,3 +46,15 @@ pub fn get_ip_cast_type(ip: Ipv4Addr) -> TrafficType {
     }
 
 }
+
+pub fn is_flow_match(flow_ip: (Ipv4Addr, Ipv4Addr), pkt_ip: (Ipv4Addr, Ipv4Addr), flow_port: (u16, u16), pkt_port: (u16, u16)) -> bool {
+    // Matches IPs bidirectionally
+   let ip_match = (flow_ip.0 == pkt_ip.0 && flow_ip.1 == pkt_ip.1) || 
+   (flow_ip.0 == pkt_ip.1 && flow_ip.1 == pkt_ip.0);
+
+   // Matches Ports bidirectionally
+   let port_match = (flow_port.0 == pkt_port.0 && flow_port.1 == pkt_port.1) || 
+       (flow_port.0 == pkt_port.1 && flow_port.1 == pkt_port.0);
+
+   ip_match && port_match
+}
