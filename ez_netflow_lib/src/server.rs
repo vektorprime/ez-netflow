@@ -4,7 +4,7 @@ use std::convert::TryInto;
 use std::io::{Error,ErrorKind};
 use std::sync::{Arc, Mutex};
 
-use rusqlite::{Connection};
+use rusqlite::Connection;
 
 use crate::fields::*;
 use crate::senders::*;
