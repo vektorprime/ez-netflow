@@ -1,0 +1,6 @@
+target/
+eznf_db.sqlite
+config.ini
+*.exe
+*.rlib
+*.pdb
