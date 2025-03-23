@@ -28,7 +28,7 @@ fn main() {
 
     //println!("server settings conn type is {:#?}", server_settings.conn_type);
     let srv_addr_and_port = String::from(&server_settings.address) + ":" + &server_settings.port.to_string();
-    let server_thread = thread::spawn(move || {
+    thread::spawn(move || {
         let mut netflow_server = NetflowServer::new(srv_addr_and_port , db_conn_srv);
         netflow_server.run();
     });

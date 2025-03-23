@@ -8,7 +8,7 @@ use rusqlite::ffi::Error;
 use rusqlite::OptionalExtension;
 use rusqlite::{ErrorCode, Connection, params};
 use tabled::{builder::Builder, settings::Style};
-
+use chrono::prelude::*;
 
 use crate::settings::*;
 use crate::templates::*;
@@ -56,6 +56,8 @@ pub fn setup_db(conn_type: &ConnType) -> Connection {
         next_hop TEXT,
         icmp TEXT,
         traffic_type TEXT,
+        created_time TEXT,
+        updated_time TEXT,
          FOREIGN KEY (sender_ip) REFERENCES senders(ip)
         )",
         [],
@@ -73,7 +75,7 @@ pub fn update_senders_in_db(db_conn: &mut Arc<Mutex<Connection>>, sender_ip: &st
 }
 
 
-pub fn create_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &String) {
+pub fn create_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &String, current_time: DateTime<Local>) {
 
     //let traffic_type = handle_traffic_cast(&flow.src_and_dst_ip.0.to_string(), &flow.src_and_dst_ip.1.to_string());
     //let traffic_type = handle_traffic_type(&flow);
@@ -97,7 +99,8 @@ pub fn create_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &S
             flow.protocol, 
             flow.in_octets, 
             flow.in_packets,
-            traffic_type),
+            traffic_type,
+            current_time.to_rfc3339()),
         ).expect("Unable to execute SQL in create_flow_in_db");
 }
 
