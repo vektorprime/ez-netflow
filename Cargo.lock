@@ -89,7 +89,7 @@ dependencies = [
 name = "ez_netflow_cli"
 version = "0.1.2"
 dependencies = [
- "ez_netflow_lib 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ez_netflow_lib 0.1.1",
  "rusqlite",
  "tabled",
 ]
@@ -97,6 +97,8 @@ dependencies = [
 [[package]]
 name = "ez_netflow_lib"
 version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf0e5a7acbd431d6d1866c8bc3bd9e91e6bb75e2b43c554d3cfb1b40fd3bc0f9"
 dependencies = [
  "chrono",
  "log",
@@ -109,9 +111,7 @@ dependencies = [
 
 [[package]]
 name = "ez_netflow_lib"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf0e5a7acbd431d6d1866c8bc3bd9e91e6bb75e2b43c554d3cfb1b40fd3bc0f9"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "log",
