@@ -151,14 +151,14 @@ impl NetflowSender {
         let mut db_conn_unlocked: MutexGuard<Connection> = db_conn.lock().unwrap();
         for flow in &mut self.flow_stats {
             flow.in_db = check_if_flow_exists_in_db(&mut db_conn_unlocked, flow);
+            let current_time = Local::now();
             if !flow.in_db {
-                let current_time = Local::now();
                 create_flow_in_db(&mut db_conn_unlocked, flow, &sender_ip, &current_time);
                 flow.in_db = true;
             }
             else {
                 
-                update_flow_in_db(&mut db_conn_unlocked, flow, &sender_ip);
+                update_flow_in_db(&mut db_conn_unlocked, flow, &sender_ip, &current_time);
             }
         }
     }

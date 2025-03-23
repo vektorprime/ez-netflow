@@ -1,5 +1,6 @@
 
 use std::io::ErrorKind;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::net::Ipv4Addr;
 use log::{error, info, debug};
@@ -106,24 +107,26 @@ pub fn create_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &S
 
 //I can't remove the "WHERE sender_ip = ?1" because it will update all of the flows
 //I first need to make sure a flow is not created twice, no matter the sender
-pub fn update_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &String) {
+pub fn update_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &String, current_time: &DateTime<Local>) {
     db_conn.execute( 
         "UPDATE flows SET 
-            in_octets = ?1, 
-            in_pkts = ?2
-            WHERE src_addr = ?3
-            AND dst_addr = ?4
-            AND src_port = ?5
-            AND dst_port = ?6
-            AND protocol = ?7",
+            in_octets = ?1,
+            in_pkts = ?2,
+            updated_time = ?3
+            WHERE src_addr = ?4
+            AND dst_addr = ?5
+            AND src_port = ?6
+            AND dst_port = ?7
+            AND protocol = ?8",
         params![
-            flow.in_octets, 
+            flow.in_octets,
             flow.in_packets,
-            flow.src_and_dst_ip.0.to_string(), 
+            current_time.to_rfc3339(),
+            flow.src_and_dst_ip.0.to_string(),
             flow.src_and_dst_ip.1.to_string(),
-            flow.src_and_dst_port.0, 
-            flow.src_and_dst_port.1, 
-            flow.protocol, 
+            flow.src_and_dst_port.0,
+            flow.src_and_dst_port.1,
+            flow.protocol
             ]
         ).expect("Unable to execute SQL in update_flow_in_db");
 }
@@ -176,7 +179,8 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
         "in_bytes",
         "icmp_type",
         "traffic_type",
-        "created_time"
+        "created",
+        "updated"
         ]);
     
     let mut conn: MutexGuard<Connection> = db_conn_cli.lock().unwrap();
@@ -237,6 +241,20 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
           let created_time: String = row.get(18).expect("Unable to open column 18");
           //println!("created_time is {created_time}");
 
+          //let updated_time: String = row.get(19).expect("Unable to open column 19");
+          let updated_time: String = match row.get(19) {
+            Ok(s) => {
+                // let t = chrono::DateTime::parse_from_rfc3339(s).unwrap();
+                // t.to_rfc3339()
+                s
+            },
+            Err(_e) => {
+                //println!("Unable to open column updated_time - {}", e);
+                " ".to_string()
+            }
+          };
+
+
           let (icmp_type, src_port2,dst_port2) = handle_icmp_code(protocol, src_port, dst_port);
        
           //let ip_cast = handle_traffic_cast(&src_addr, &dst_addr);
@@ -253,6 +271,7 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
                 icmp_type,
                 traffic_cast,
                 created_time,
+                updated_time,
                 ]);
 
         }
