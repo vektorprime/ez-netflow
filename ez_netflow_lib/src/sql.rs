@@ -235,7 +235,7 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
           let traffic_cast: String = row.get(17).expect("Unable to open column 17");
 
           let created_time: String = row.get(18).expect("Unable to open column 18");
-          println!("created_time is {created_time}");
+          //println!("created_time is {created_time}");
 
           let (icmp_type, src_port2,dst_port2) = handle_icmp_code(protocol, src_port, dst_port);
        

@@ -1,3 +1,0 @@
-[workspace]
-resolver = "2"
-members = ["ez_netflow_cli", "ez_netflow_lib"]

@@ -1,5 +1,0 @@
-/target
-/ez_netflow_cli/target
-/ez_netflow_lib/target
-eznf_db.sqlite
-config.ini
