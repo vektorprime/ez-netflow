@@ -6,9 +6,14 @@ use rusqlite::{params, Connection, Error, Result, Row, Rows, Statement};
 
 use tabled::tables::*;
 
+extern crate simplelog;
+use simplelog::*;
+use std::fs::File;
+use log::{error, info, debug};
 
 mod cli;
 use crate::cli::*;
+
 
 
 use ez_netflow_lib::server::*;
@@ -17,7 +22,13 @@ use ez_netflow_lib::settings::*;
 
 
 fn main() {
-
+    CombinedLogger::init(
+        vec![
+            WriteLogger::new(LevelFilter::Info, Config::default(), File::create("eznf.log").unwrap()),
+        ]
+    ).unwrap();
+  
+    info!("Starting ez_netflow_cli");
 
     let server_settings = ServerSettings::new("config.ini");
 

@@ -80,6 +80,7 @@ pub struct NetFlow {
     pub in_packets: u32,
     pub in_db: bool,
     pub traffic_type: TrafficType,
+    pub needs_db_update: bool
 }
 
 #[derive(Clone, Serialize)]

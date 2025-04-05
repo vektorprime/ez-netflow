@@ -116,6 +116,7 @@ impl NetflowSender {
                                 flow.in_octets += oct;
                                 flow.in_packets += pk;
                                 updated_flow = true;
+                                flow.needs_db_update = true;
                                 break;
                         }
                     }
@@ -132,6 +133,7 @@ impl NetflowSender {
                             in_octets: oct,
                             in_packets: pk,
                             in_db: false,
+                            needs_db_update: true,
                             traffic_type: cast,
                         };
                         self.flow_stats.push(new_flow)
@@ -150,16 +152,22 @@ impl NetflowSender {
         let sender_ip: String = String::from(&self.ip_addr.to_string());
         let mut db_conn_unlocked: MutexGuard<Connection> = db_conn.lock().unwrap();
         for flow in &mut self.flow_stats {
-            flow.in_db = check_if_flow_exists_in_db(&mut db_conn_unlocked, flow);
-            let current_time = Local::now();
-            if !flow.in_db {
-                create_flow_in_db(&mut db_conn_unlocked, flow, &sender_ip, &current_time);
-                flow.in_db = true;
+            // needs_db_update is required because this func and parse_packet_to_flow share overlap
+            // upstream to this call we are iterating over senders, which would dup flow stats and create dup updated_times in db
+            if flow.needs_db_update {
+                flow.in_db = check_if_flow_exists_in_db(&mut db_conn_unlocked, flow);
+                let current_time = Local::now();
+                if !flow.in_db {
+                    create_flow_in_db(&mut db_conn_unlocked, flow, &sender_ip, &current_time);
+                    flow.in_db = true;
+                    flow.needs_db_update = false;
+                }
+                else {
+                    update_flow_in_db(&mut db_conn_unlocked, flow, &sender_ip, &current_time);
+                    flow.needs_db_update = false;
+                }
             }
-            else {
-                
-                update_flow_in_db(&mut db_conn_unlocked, flow, &sender_ip, &current_time);
-            }
+            
         }
     }
 }

@@ -38,6 +38,15 @@ pub fn setup_db(conn_type: &ConnType) -> Connection {
         [],
         ).expect("Unable to create senders table in DB");
 
+    db_conn.execute("CREATE TABLE IF NOT EXISTS time (
+        id INTEGER PRIMARY KEY,
+        flow_id INTERGER NOT NULL,
+        updated_time TEXT,
+        FOREIGN KEY (flow_id) REFERENCES flows(id)
+        )",
+        [],
+        ).expect("Unable to create time table in DB");
+    
     db_conn.execute("CREATE TABLE IF NOT EXISTS flows (
         id INTEGER PRIMARY KEY,
         sender_ip TEXT NOT NULL,
@@ -58,8 +67,7 @@ pub fn setup_db(conn_type: &ConnType) -> Connection {
         icmp TEXT,
         traffic_type TEXT,
         created_time TEXT,
-        updated_time TEXT,
-         FOREIGN KEY (sender_ip) REFERENCES senders(ip)
+        FOREIGN KEY (sender_ip) REFERENCES senders(ip)
         )",
         [],
         ).expect("Unable to create flows table in DB");
@@ -105,30 +113,65 @@ pub fn create_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &S
         ).expect("Unable to execute SQL in create_flow_in_db");
 }
 
-//I can't remove the "WHERE sender_ip = ?1" because it will update all of the flows
-//I first need to make sure a flow is not created twice, no matter the sender
+// I can't remove the "WHERE sender_ip = ?1" because it will update all of the flows
+// I first need to make sure a flow is not created twice, no matter the sender
 pub fn update_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &String, current_time: &DateTime<Local>) {
+    info!("running update_flow_in_db for flow src_ip {}, dst_ip {}, src_port {}, dst_port {}",
+        flow.src_and_dst_ip.0.to_string(), 
+        flow.src_and_dst_ip.1.to_string(),
+        flow.src_and_dst_port.0,
+        flow.src_and_dst_port.1,
+    );
+    // update the flow packets and bytes
     db_conn.execute( 
         "UPDATE flows SET 
             in_octets = ?1,
-            in_pkts = ?2,
-            updated_time = ?3
-            WHERE src_addr = ?4
-            AND dst_addr = ?5
-            AND src_port = ?6
-            AND dst_port = ?7
-            AND protocol = ?8",
+            in_pkts = ?2
+            WHERE src_addr = ?3
+            AND dst_addr = ?4
+            AND src_port = ?5
+            AND dst_port = ?6
+            AND protocol = ?7",
         params![
             flow.in_octets,
             flow.in_packets,
-            current_time.to_rfc3339(),
             flow.src_and_dst_ip.0.to_string(),
             flow.src_and_dst_ip.1.to_string(),
             flow.src_and_dst_port.0,
             flow.src_and_dst_port.1,
             flow.protocol
             ]
-        ).expect("Unable to execute SQL in update_flow_in_db");
+        ).expect("Unable to execute SQL on flows table in update_flow_in_db");
+
+    // get flow id
+    let flow_id = db_conn.query_row(
+        "SELECT id FROM flows
+        WHERE src_addr = ?1
+        AND dst_addr = ?2
+        AND src_port = ?3
+        AND dst_port = ?4
+        AND protocol = ?5",
+        params![
+        &flow.src_and_dst_ip.0.to_string(), 
+        &flow.src_and_dst_ip.1.to_string(), 
+        &flow.src_and_dst_port.0, 
+        &flow.src_and_dst_port.1,
+        &flow.protocol],
+        |row| row.get::<_, i32>(0),
+    ).expect("Unable to get flow id in update_flow_in_db");
+    info!("got flow_id {}", flow_id);
+
+    // update time table with flow id and time
+    db_conn.execute( 
+        "INSERT INTO time 
+            (flow_id, updated_time) 
+            VALUES (?1, ?2)",
+        (
+            flow_id,
+            current_time.to_rfc3339(),
+        ),
+        ).expect("Unable to execute SQL on time table in update_flow_in_db");
+        info!("inserted updated_time {}", current_time.to_rfc3339());
 }
 
 pub fn check_if_flow_exists_in_db(db_conn: &mut Connection, flow: &NetFlow) -> bool {
