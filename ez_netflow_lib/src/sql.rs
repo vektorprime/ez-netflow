@@ -223,7 +223,6 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
         "icmp_type",
         "traffic_type",
         "created",
-        "updated"
         ]);
     
     let mut conn: MutexGuard<Connection> = db_conn_cli.lock().unwrap();
@@ -262,67 +261,54 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
     let mut rows = stmt.query(params![flow_limit])
         .expect("Unable to query rows");
 
-       while let Some(row) = rows.next().expect("no more rows") {
-          let sender_ip: String = row.get(1).expect("Unable to open column 1");
-          //println!("sender_ip is {sender_ip}");
-          let src_addr: String = row.get(2).expect("Unable to open column 2");
-          //println!("src_addr is {src_addr}");
-          let dst_addr: String = row.get(3).expect("Unable to open column 3");
-          //println!("dst_addr is {dst_addr}");
-          let protocol: i32 = row.get(4).expect("Unable to open column 4");
-          //println!("protocol is {protocol}");
-          let src_port: i32 = row.get(5).expect("Unable to open column 5");
-          //println!("src_port is {src_port}");
-          let dst_port: i32 = row.get(6).expect("Unable to open column 6");
-          //println!("dst_port is {dst_port}");
-          let in_pkts: i32 = row.get(10).expect("Unable to open column 10");
-          //println!("in_pkts is {in_pkts}");
-          let in_bytes: i32 = row.get(11).expect("Unable to open column 11");
-          //println!("in_bytes is {in_bytes}");
-          let traffic_cast: String = row.get(17).expect("Unable to open column 17");
+    while let Some(row) = rows.next().expect("no more rows") {
+        let sender_ip: String = row.get(1).expect("Unable to open column 1");
+        //println!("sender_ip is {sender_ip}");
+        let src_addr: String = row.get(2).expect("Unable to open column 2");
+        //println!("src_addr is {src_addr}");
+        let dst_addr: String = row.get(3).expect("Unable to open column 3");
+        //println!("dst_addr is {dst_addr}");
+        let protocol: i32 = row.get(4).expect("Unable to open column 4");
+        //println!("protocol is {protocol}");
+        let src_port: i32 = row.get(5).expect("Unable to open column 5");
+        //println!("src_port is {src_port}");
+        let dst_port: i32 = row.get(6).expect("Unable to open column 6");
+        //println!("dst_port is {dst_port}");
+        let in_pkts: i32 = row.get(10).expect("Unable to open column 10");
+        //println!("in_pkts is {in_pkts}");
+        let in_bytes: i32 = row.get(11).expect("Unable to open column 11");
+        //println!("in_bytes is {in_bytes}");
+        let traffic_cast: String = row.get(17).expect("Unable to open column 17");
 
-          let created_time: String = row.get(18).expect("Unable to open column 18");
-          //println!("created_time is {created_time}");
-
-          //let updated_time: String = row.get(19).expect("Unable to open column 19");
-          let updated_time: String = match row.get(19) {
-            Ok(s) => {
-                // let t = chrono::DateTime::parse_from_rfc3339(s).unwrap();
-                // t.to_rfc3339_opts(SecondsFormat::Secs, true)
-                s
-            },
-            Err(_e) => {
-                //println!("Unable to open column updated_time - {}", e);
-                " ".to_string()
-            }
-          };
+        let created_time: String = row.get(18).expect("Unable to open column 18");
+        //println!("created_time is {created_time}");
 
 
-          let (icmp_type, src_port2,dst_port2) = handle_icmp_code(protocol, src_port, dst_port);
-       
-          //let ip_cast = handle_traffic_cast(&src_addr, &dst_addr);
 
-            builder.push_record([
-                sender_ip, 
-                src_addr, 
-                dst_addr, 
-                protocol.to_string(), 
-                src_port2.to_string(), 
-                dst_port2.to_string(), 
-                in_pkts.to_string(), 
-                in_bytes.to_string(),
-                icmp_type,
-                traffic_cast,
-                created_time,
-                updated_time,
-                ]);
+        let (icmp_type, src_port2,dst_port2) = handle_icmp_code(protocol, src_port, dst_port);
+    
+        //let ip_cast = handle_traffic_cast(&src_addr, &dst_addr);
 
-        }
+        builder.push_record([
+            sender_ip, 
+            src_addr, 
+            dst_addr, 
+            protocol.to_string(), 
+            src_port2.to_string(), 
+            dst_port2.to_string(), 
+            in_pkts.to_string(), 
+            in_bytes.to_string(),
+            icmp_type,
+            traffic_cast,
+            created_time,
+            ]);
+
+    }
 
 
-        let mut table = builder.build();
-        table.with(Style::ascii_rounded());
-        table
+    let mut table = builder.build();
+    table.with(Style::ascii_rounded());
+    table
 
 }
 
