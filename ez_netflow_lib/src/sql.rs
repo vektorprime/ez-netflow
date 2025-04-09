@@ -109,19 +109,19 @@ pub fn create_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &S
             flow.in_octets, 
             flow.in_packets,
             traffic_type,
-            current_time.to_rfc3339()),
+            current_time.to_rfc3339_opts(SecondsFormat::Secs, true)),
         ).expect("Unable to execute SQL in create_flow_in_db");
 }
 
 // I can't remove the "WHERE sender_ip = ?1" because it will update all of the flows
 // I first need to make sure a flow is not created twice, no matter the sender
 pub fn update_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &String, current_time: &DateTime<Local>) {
-    info!("running update_flow_in_db for flow src_ip {}, dst_ip {}, src_port {}, dst_port {}",
-        flow.src_and_dst_ip.0.to_string(), 
-        flow.src_and_dst_ip.1.to_string(),
-        flow.src_and_dst_port.0,
-        flow.src_and_dst_port.1,
-    );
+    // info!("running update_flow_in_db for flow src_ip {}, dst_ip {}, src_port {}, dst_port {}",
+    //     flow.src_and_dst_ip.0.to_string(), 
+    //     flow.src_and_dst_ip.1.to_string(),
+    //     flow.src_and_dst_port.0,
+    //     flow.src_and_dst_port.1,
+    // );
     // update the flow packets and bytes
     db_conn.execute( 
         "UPDATE flows SET 
@@ -159,7 +159,7 @@ pub fn update_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &S
         &flow.protocol],
         |row| row.get::<_, i32>(0),
     ).expect("Unable to get flow id in update_flow_in_db");
-    info!("got flow_id {}", flow_id);
+    //info!("got flow_id {}", flow_id);
 
     // update time table with flow id and time
     db_conn.execute( 
@@ -168,10 +168,10 @@ pub fn update_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &S
             VALUES (?1, ?2)",
         (
             flow_id,
-            current_time.to_rfc3339(),
+            current_time.to_rfc3339_opts(SecondsFormat::Secs, true),
         ),
         ).expect("Unable to execute SQL on time table in update_flow_in_db");
-        info!("inserted updated_time {}", current_time.to_rfc3339());
+        //info!("inserted updated_time {}", current_time.to_rfc3339_opts(SecondsFormat::Secs, true));
 }
 
 pub fn check_if_flow_exists_in_db(db_conn: &mut Connection, flow: &NetFlow) -> bool {
@@ -288,7 +288,7 @@ pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, serve
           let updated_time: String = match row.get(19) {
             Ok(s) => {
                 // let t = chrono::DateTime::parse_from_rfc3339(s).unwrap();
-                // t.to_rfc3339()
+                // t.to_rfc3339_opts(SecondsFormat::Secs, true)
                 s
             },
             Err(_e) => {

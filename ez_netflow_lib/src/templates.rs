@@ -119,6 +119,7 @@ pub struct NetFlowJson {
     pub in_packets: u32,
     pub traffic_type: TrafficType,
     pub icmp: String,
+    pub created_time: String,
 }
 
 #[derive(Clone)]
