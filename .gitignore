@@ -6,3 +6,4 @@ config.ini
 *.exe
 *.rlib
 *.pdb
+eznf.log
