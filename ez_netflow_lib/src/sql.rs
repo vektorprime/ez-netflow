@@ -15,7 +15,7 @@ use crate::settings::*;
 use crate::templates::*;
 use crate::utils::*;
 use crate::fields::*;
-
+use crate::time::*;
 
 
 pub fn setup_db(conn_type: &ConnType) -> Connection {
@@ -38,14 +38,18 @@ pub fn setup_db(conn_type: &ConnType) -> Connection {
         [],
         ).expect("Unable to create senders table in DB");
 
-    db_conn.execute("CREATE TABLE IF NOT EXISTS time (
+    db_conn.execute("CREATE TABLE IF NOT EXISTS delta (
         id INTEGER PRIMARY KEY,
         flow_id INTERGER NOT NULL,
         updated_time TEXT,
+        in_octets INTEGER,
+        in_pkts INTEGER,
+        bps INTEGER,
+        pps INTEGER,
         FOREIGN KEY (flow_id) REFERENCES flows(id)
         )",
         [],
-        ).expect("Unable to create time table in DB");
+        ).expect("Unable to create delta table in DB");
     
     db_conn.execute("CREATE TABLE IF NOT EXISTS flows (
         id INTEGER PRIMARY KEY,
@@ -101,10 +105,10 @@ pub fn create_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &S
             (sender_ip, src_addr, dst_addr, src_port, dst_port, protocol, in_octets, in_pkts, traffic_type, created_time) 
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         (sender_ip.to_string(), 
-            flow.src_and_dst_ip.0.to_string(), 
-            flow.src_and_dst_ip.1.to_string(),
-            flow.src_and_dst_port.0, 
-            flow.src_and_dst_port.1, 
+            flow.src_ip.to_string(), 
+            flow.dst_ip.to_string(),
+            flow.src_port, 
+            flow.dst_port, 
             flow.protocol, 
             flow.in_octets, 
             flow.in_packets,
@@ -135,10 +139,10 @@ pub fn update_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &S
         params![
             flow.in_octets,
             flow.in_packets,
-            flow.src_and_dst_ip.0.to_string(),
-            flow.src_and_dst_ip.1.to_string(),
-            flow.src_and_dst_port.0,
-            flow.src_and_dst_port.1,
+            flow.src_ip.to_string(), 
+            flow.dst_ip.to_string(),
+            flow.src_port, 
+            flow.dst_port, 
             flow.protocol
             ]
         ).expect("Unable to execute SQL on flows table in update_flow_in_db");
@@ -152,25 +156,39 @@ pub fn update_flow_in_db(db_conn: &mut Connection, flow: &NetFlow, sender_ip: &S
         AND dst_port = ?4
         AND protocol = ?5",
         params![
-        &flow.src_and_dst_ip.0.to_string(), 
-        &flow.src_and_dst_ip.1.to_string(), 
-        &flow.src_and_dst_port.0, 
-        &flow.src_and_dst_port.1,
-        &flow.protocol],
+            flow.src_ip.to_string(), 
+            flow.dst_ip.to_string(),
+            flow.src_port, 
+            flow.dst_port, 
+            flow.protocol],
         |row| row.get::<_, i32>(0),
     ).expect("Unable to get flow id in update_flow_in_db");
     //info!("got flow_id {}", flow_id);
 
-    // update time table with flow id and time
+    let delta_oct_pk: (i64, i64) = match flow.deltas.last() {
+        Some(delta) => (delta.in_octets, delta.in_pkts),
+        None => (0,0),
+    };
+    let delta_bps_pps: (i64, i64) = match flow.deltas.last() {
+        Some(delta) => (delta.bps, delta.pps),
+        None => (0,0),
+    };
+
+    // update delta table with flow id, time, bytes, and packets
     db_conn.execute( 
-        "INSERT INTO time 
-            (flow_id, updated_time) 
-            VALUES (?1, ?2)",
+        "INSERT INTO delta 
+            (flow_id, updated_time, in_octets, in_pkts, bps, pps) 
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         (
             flow_id,
             current_time.to_rfc3339_opts(SecondsFormat::Secs, true),
+            delta_oct_pk.0,
+            delta_oct_pk.1,
+            delta_bps_pps.0,
+            delta_bps_pps.1,
+
         ),
-        ).expect("Unable to execute SQL on time table in update_flow_in_db");
+        ).expect("Unable to execute SQL on delta table in update_flow_in_db");
         //info!("inserted updated_time {}", current_time.to_rfc3339_opts(SecondsFormat::Secs, true));
 }
 
@@ -182,11 +200,11 @@ pub fn check_if_flow_exists_in_db(db_conn: &mut Connection, flow: &NetFlow) -> b
              ((src_port = ?3 AND dst_port = ?4) OR (src_port = ?4 AND dst_port = ?3)) AND
             protocol = ?5",
             params![
-            &flow.src_and_dst_ip.0.to_string(), 
-            &flow.src_and_dst_ip.1.to_string(), 
-            &flow.src_and_dst_port.0, 
-            &flow.src_and_dst_port.1,
-            &flow.protocol],
+                flow.src_ip.to_string(), 
+                flow.dst_ip.to_string(),
+                flow.src_port, 
+                flow.dst_port, 
+                flow.protocol],
             |row| row.get::<_, i32>(0),
     );
 
@@ -207,6 +225,10 @@ pub fn check_if_flow_exists_in_db(db_conn: &mut Connection, flow: &NetFlow) -> b
     }
     
 }
+
+
+
+
 
 pub fn get_all_flows_from_sender(db_conn_cli: &mut Arc<Mutex<Connection>>, server_settings: &ServerSettings) -> tabled::Table {
 

@@ -48,18 +48,30 @@ pub fn get_ip_cast_type(ip: Ipv4Addr) -> TrafficType {
 
 }
 
-pub fn is_flow_match(flow_ip: (Ipv4Addr, Ipv4Addr), pkt_ip: (Ipv4Addr, Ipv4Addr), flow_port: (u16, u16), pkt_port: (u16, u16)) -> bool {
-    // Matches IPs bidirectionally
-   let ip_match = (flow_ip.0 == pkt_ip.0 && flow_ip.1 == pkt_ip.1) || 
-   (flow_ip.0 == pkt_ip.1 && flow_ip.1 == pkt_ip.0);
+// pub fn is_flow_match(flow_ip: (Ipv4Addr, Ipv4Addr), pkt_ip: (Ipv4Addr, Ipv4Addr), flow_port: (u16, u16), pkt_port: (u16, u16)) -> bool {
+//     // Matches IPs bidirectionally
+//    let ip_match = (flow.src_ip == pkt_src_ip && flow.dst_ip == pkt_dst_ip) || 
+//    (flow.src_ip == pkt_dst_ip && flow.dst_ip == pkt_src_ip);
 
-   // Matches Ports bidirectionally
-   let port_match = (flow_port.0 == pkt_port.0 && flow_port.1 == pkt_port.1) || 
-       (flow_port.0 == pkt_port.1 && flow_port.1 == pkt_port.0);
+//    // Matches Ports bidirectionally
+//    let port_match = (flow_port.0 == pkt_port.0 && flow_port.1 == pkt_port.1) || 
+//        (flow_port.0 == pkt_port.1 && flow_port.1 == pkt_port.0);
 
-   ip_match && port_match
+//    ip_match && port_match
+// }
+
+pub fn is_flow_match(flow_src_ip: Ipv4Addr, flow_dst_ip: Ipv4Addr, pkt_src_ip: Ipv4Addr, pkt_dst_ip: Ipv4Addr, 
+    flow_src_port: u16, flow_dst_port: u16, pkt_src_port: u16, pkt_dst_port: u16) -> bool {
+        // Matches IPs bidirectionally
+        let ip_match = (flow_src_ip == pkt_src_ip && flow_dst_ip == pkt_dst_ip) || 
+        (flow_src_ip == pkt_dst_ip && flow_dst_ip == pkt_src_ip);
+
+        // Matches Ports bidirectionally
+        let port_match = (flow_src_port == pkt_src_port && flow_dst_port == pkt_dst_port) || 
+            (flow_src_port == pkt_dst_port && flow_dst_port == pkt_src_port);
+
+        ip_match && port_match
 }
-
 
 
 pub fn handle_icmp_code(protocol: i32, src_port:i32, dst_port:i32) -> (String, i32, i32) {
@@ -99,8 +111,8 @@ pub fn handle_traffic_type(flow: &NetFlow) -> String {
     //This only partially works because we don't know the mask for some broadcast traffic 
     //e.g. 10.0.0.255 could be valid unicast in a /16.
 
-    let src_ip_cast = get_ip_cast_type(flow.src_and_dst_ip.0);
-    let dst_ip_cast = get_ip_cast_type(flow.src_and_dst_ip.1);
+    let src_ip_cast = get_ip_cast_type(flow.src_ip);
+    let dst_ip_cast = get_ip_cast_type(flow.dst_ip);
 
     //let dst_mac = flow.
 

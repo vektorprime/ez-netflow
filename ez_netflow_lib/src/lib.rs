@@ -13,6 +13,7 @@ pub mod senders;
 pub mod utils;
 pub mod sql;
 pub mod settings;
+pub mod time;
 
 use server::NetflowServer;
 

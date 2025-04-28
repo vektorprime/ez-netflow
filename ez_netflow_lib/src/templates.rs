@@ -1,8 +1,11 @@
 use std::net::Ipv4Addr;
 
+use chrono::TimeDelta;
 use serde::Serialize;
+use chrono::prelude::*;
 
 use crate::fields::*;
+use crate::time::*;
 
 
 #[derive(Clone, Default)]
@@ -69,19 +72,74 @@ pub struct NetflowTemplate {
     //nothing for l2_packet section yet
 }
 
+#[derive(Default, Clone, Serialize)]
 
+pub struct NetFlowDelta {
+    pub updated_time: DateTime<Local>,
+    pub in_octets: i64,
+    pub in_pkts: i64,
+    pub bps: i64,
+    pub pps: i64,
+}
 
 #[derive(Clone, Serialize)]
 pub struct NetFlow {
-    pub src_and_dst_ip: (Ipv4Addr, Ipv4Addr),
-    pub src_and_dst_port: (u16, u16),
+    //pub src_and_dst_ip: (Ipv4Addr, Ipv4Addr),
+    pub src_ip: Ipv4Addr,
+    pub dst_ip: Ipv4Addr,
+    pub src_port: u16,
+    pub dst_port: u16,
+    //pub src_and_dst_port: (u16, u16),
     pub protocol: u8,
     pub in_octets: u32,
     pub in_packets: u32,
     pub in_db: bool,
     pub traffic_type: TrafficType,
-    pub needs_db_update: bool
+    pub needs_db_update: bool,
+    pub deltas: Vec<NetFlowDelta>,
+    //pub created_time: Option<DateTime<Local>>,
 }
+
+impl NetFlow {
+    pub fn update_throughput(&mut self) {
+        let current_time = match &self.deltas.last() {
+            Some(s) => s.updated_time,
+            None => Local::now(),
+        };
+        let old_time = if self.deltas.len() > 2 {
+            self.deltas.get(self.deltas.len() -2).unwrap().updated_time
+        }
+        else {
+            current_time - TimeDelta::try_seconds(60).unwrap()
+        };
+        let diff_sec = get_time_delta_in_sec(current_time, old_time); 
+        //println!("diff_sec is {}", diff_sec);
+
+        let conn_timeout_in_sec = 3900;
+        if diff_sec < conn_timeout_in_sec {
+            //calc bps and pps
+            //println!("self.deltas.last_mut().unwrap().in_octets is {}", self.deltas.last_mut().unwrap().in_octets);
+            //println!("self.deltas.last_mut().unwrap().in_pkts is {}", self.deltas.last_mut().unwrap().in_pkts);
+
+            if  self.deltas.last_mut().unwrap().in_octets > 0 {
+                self.deltas.last_mut().unwrap().bps = self.deltas.last_mut().unwrap().in_octets / diff_sec;
+            }
+            if  self.deltas.last_mut().unwrap().in_pkts > 0 {
+                self.deltas.last_mut().unwrap().pps = self.deltas.last_mut().unwrap().in_pkts / diff_sec;
+            }
+
+            
+        }
+        else {
+            //if flow has no data for longer than 1 hr and 5 min assume it's ended
+            //println!("flow diff_sec is greater than 3900, setting pps and bps to 0");
+            self.deltas.last_mut().unwrap().pps = 0;
+            self.deltas.last_mut().unwrap().bps = 0;
+        }
+    }
+}
+
+
 
 #[derive(Clone, Serialize)]
 pub struct NetflowBytesJson {

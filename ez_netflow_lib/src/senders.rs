@@ -35,8 +35,8 @@ impl NetflowSender {
           //look for existing flow and update
           for flow in &self.flow_stats {
             println!("Start flow data...");
-            println!("Src IP is {} and Dst IP is {}", flow.src_and_dst_ip.0, flow.src_and_dst_ip.1 );
-            println!("Src Port is {} and Dst Port is {}", flow.src_and_dst_port.0, flow.src_and_dst_port.1);
+            println!("Src IP is {} and Dst IP is {}", flow.src_ip, flow.dst_ip );
+            println!("Src Port is {} and Dst Port is {}", flow.src_ip, flow.dst_ip);
             println!("Protocol is {}", flow.protocol);
             println!("Bytes/octets are {}", flow.in_octets );
             println!("Packets are {}", flow.in_packets);
@@ -68,33 +68,53 @@ impl NetflowSender {
                         _ => 0,
                     };
 
-                    let s_and_d_ip: (Ipv4Addr, Ipv4Addr) = (
-                        match pkt.src_addr {
-                            Some(Ipv4Field::Value(v)) => { v },
-                            _ => Ipv4Addr::UNSPECIFIED,
-                        },
-                        match pkt.dst_addr {
-                            Some(Ipv4Field::Value(v)) => { v },
-                            _ => Ipv4Addr::UNSPECIFIED,
-                        }
-                    );
+                    // let s_and_d_ip: (Ipv4Addr, Ipv4Addr) = (
+                    //     match pkt.src_addr {
+                    //         Some(Ipv4Field::Value(v)) => { v },
+                    //         _ => Ipv4Addr::UNSPECIFIED,
+                    //     },
+                    //     match pkt.dst_addr {
+                    //         Some(Ipv4Field::Value(v)) => { v },
+                    //         _ => Ipv4Addr::UNSPECIFIED,
+                    //     }
+                    // );
 
-                    let s_and_d_port: (u16, u16) = (
-                        match pkt.src_port {
-                            Some(U16Field::Value(v)) => { v },
-                            _ => 0,
-                        },
-                        match pkt.dst_port {
-                            Some(U16Field::Value(v)) => { v },
-                            _ => 0,
-                        }
-                    );
+                    let src_ip: Ipv4Addr = match pkt.src_addr {
+                        Some(Ipv4Field::Value(v)) => { v },
+                        _ => Ipv4Addr::UNSPECIFIED,
+                    };
+
+                    let dst_ip: Ipv4Addr = match pkt.dst_addr {
+                        Some(Ipv4Field::Value(v)) => { v },
+                        _ => Ipv4Addr::UNSPECIFIED,
+                    };
+
+                    let src_port: u16 = match pkt.src_port {
+                        Some(U16Field::Value(v)) => { v },
+                        _ => 0,
+                    };
+
+                    let dst_port: u16 = match pkt.dst_port {
+                        Some(U16Field::Value(v)) => { v },
+                        _ => 0,
+                    };
+
+                    // let s_and_d_port: (u16, u16) = (
+                    //     match pkt.src_port {
+                    //         Some(U16Field::Value(v)) => { v },
+                    //         _ => 0,
+                    //     },
+                    //     match pkt.dst_port {
+                    //         Some(U16Field::Value(v)) => { v },
+                    //         _ => 0,
+                    //     }
+                    // );
 
                     let cast: TrafficType = match pkt.in_dst_mac {
                         Some(U64Field::Value(v)) => { 
                             let field_array: [u8; 8] = v.to_be_bytes();
                             //let field_array: [u8; 6] = field_array_64[..6];
-                            let pkt_cast = handle_traffic_type_in_flow(s_and_d_ip.0, s_and_d_ip.1);
+                            let pkt_cast = handle_traffic_type_in_flow(src_ip, dst_ip);
                             if pkt_cast == TrafficType::Unicast && field_array[0] == 0xFF && field_array[1] == 0xFF
                             && field_array[2] == 0xFF && field_array[3] == 0xFF && field_array[4] == 0xFF && field_array[5] == 0xFF {
                                 TrafficType::Broadcast
@@ -104,15 +124,28 @@ impl NetflowSender {
                             }
                         },
                         _ =>  {
-                            handle_traffic_type_in_flow(s_and_d_ip.0, s_and_d_ip.1)
+                            handle_traffic_type_in_flow(src_ip, dst_ip)
                         },
                     };
 
                     let mut updated_flow = false;
                     //look for existing flow and update
                     for flow in &mut self.flow_stats {
-                        if is_flow_match(flow.src_and_dst_ip, s_and_d_ip, flow.src_and_dst_port, s_and_d_port) {
+                        if is_flow_match(flow.src_ip, flow.dst_ip, src_ip, dst_ip,
+                             flow.src_port, flow.dst_port, src_port, dst_port) {
                                 //println!("updating existing flow");
+                                //first update the delta vec for the flow so we can have the correct value when we update db later
+                                //this separation is required to have both gui and cli displays
+                                let current_time = Local::now();
+                                let new_delta = NetFlowDelta {
+                                  updated_time: current_time,
+                                  in_octets: oct as i64,
+                                  in_pkts: pk as i64,
+                                  ..Default::default()
+                                };
+                                flow.deltas.push(new_delta);
+                                //add the delta here so we can display it in cli if required
+                                flow.update_throughput();
                                 flow.in_octets += oct;
                                 flow.in_packets += pk;
                                 updated_flow = true;
@@ -121,13 +154,14 @@ impl NetflowSender {
                         }
                     }
 
-                    //no flows
-                    //create new flow
+                    //no flow exists, create new
                     if !updated_flow {
                         //println!("flow_stats is empty, creating new flow");
                         let new_flow = NetFlow {
-                            src_and_dst_ip: s_and_d_ip,
-                            src_and_dst_port: s_and_d_port,
+                            src_ip,
+                            dst_ip,
+                            src_port,
+                            dst_port,
                             protocol: proto,
                             //Need to handle optional variants
                             in_octets: oct,
@@ -135,6 +169,8 @@ impl NetflowSender {
                             in_db: false,
                             needs_db_update: true,
                             traffic_type: cast,
+                            //delta starts empty if the flow is new, it grows when flow is updated in for loop above
+                            deltas: Vec::new(),
                         };
                         self.flow_stats.push(new_flow)
                     }
@@ -147,6 +183,8 @@ impl NetflowSender {
             
         }
     }
+
+ 
 
     pub fn prepare_and_update_flow_in_db(&mut self, db_conn: &mut Arc<Mutex<Connection>>) {
         let sender_ip: String = String::from(&self.ip_addr.to_string());
