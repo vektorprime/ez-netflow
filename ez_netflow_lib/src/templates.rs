@@ -97,7 +97,7 @@ pub struct NetFlow {
     pub traffic_type: TrafficType,
     pub needs_db_update: bool,
     pub deltas: Vec<NetFlowDelta>,
-    //pub created_time: Option<DateTime<Local>>,
+    pub created_time: DateTime<Local>,
 }
 
 impl NetFlow {
@@ -126,9 +126,7 @@ impl NetFlow {
             }
             if  self.deltas.last_mut().unwrap().in_pkts > 0 {
                 self.deltas.last_mut().unwrap().pps = self.deltas.last_mut().unwrap().in_pkts / diff_sec;
-            }
-
-            
+            } 
         }
         else {
             //if flow has no data for longer than 1 hr and 5 min assume it's ended

@@ -128,6 +128,7 @@ impl NetflowSender {
                         },
                     };
 
+                    let current_time = Local::now();
                     let mut updated_flow = false;
                     //look for existing flow and update
                     for flow in &mut self.flow_stats {
@@ -136,13 +137,14 @@ impl NetflowSender {
                                 //println!("updating existing flow");
                                 //first update the delta vec for the flow so we can have the correct value when we update db later
                                 //this separation is required to have both gui and cli displays
-                                let current_time = Local::now();
+                                
                                 let new_delta = NetFlowDelta {
                                   updated_time: current_time,
                                   in_octets: oct as i64,
                                   in_pkts: pk as i64,
                                   ..Default::default()
                                 };
+                                
                                 flow.deltas.push(new_delta);
                                 //add the delta here so we can display it in cli if required
                                 flow.update_throughput();
@@ -169,6 +171,7 @@ impl NetflowSender {
                             in_db: false,
                             needs_db_update: true,
                             traffic_type: cast,
+                            created_time: current_time,
                             //delta starts empty if the flow is new, it grows when flow is updated in for loop above
                             deltas: Vec::new(),
                         };
